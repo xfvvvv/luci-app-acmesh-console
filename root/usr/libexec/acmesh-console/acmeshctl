@@ -157,6 +157,13 @@ acmesh_run_deploy_profile() (
 )
 
 case "$cmd" in
+	__task-worker)
+		[ "$#" -ge 4 ] || exit 2
+		task_worker_id="$1" task_worker_operation="$2" task_worker_stage="$3"
+		shift 3
+		acmesh_task_run "$task_worker_id" "$task_worker_operation" "$task_worker_stage" "$@"
+		exit $?
+		;;
 	status)
 		acmesh_scan_home "$home"
 		;;
@@ -231,7 +238,7 @@ case "$cmd" in
 		;;
 	import-history)
 		task_id="$(acmesh_task_create import-history)"
-		acmesh_task_run "$task_id" import-history scan acmesh_import_history "$home"
+		acmesh_task_spawn "$task_id" import-history scan acmesh_import_history "$home" || exit 1
 		printf '{"ok":true,"taskId":"%s"}\n' "$(acmesh_json_escape "$task_id")"
 		;;
 	import-preview)
@@ -276,9 +283,7 @@ case "$cmd" in
 			esac
 		done
 		task_id="$(acmesh_task_create ssh-test)"
-		(
-			acmesh_task_run "$task_id" ssh-test connect acmesh_ssh_test_log "$host" "$port" "$user" "$key" "$remote_command" "$test_mode"
-		) &
+		acmesh_task_spawn "$task_id" ssh-test connect acmesh_ssh_test_log "$host" "$port" "$user" "$key" "$remote_command" "$test_mode" || exit 1
 		if [ "$test_mode" = 1 ]; then
 			printf '{"ok":true,"testMode":true,"taskId":"%s"}\n' "$(acmesh_json_escape "$task_id")"
 		else
@@ -512,9 +517,7 @@ case "$cmd" in
 			rm -f "$dns_resolved"
 		fi
 		credentials="$(acmesh_sanitize_credentials "$credentials")" || { printf '{"ok":false,"error":"invalid DNS credential payload"}\n'; exit 2; }
-		(
-			acmesh_task_run "$task_id" dns-test diagnostic acmesh_dns_test_log "$main_domain" "$dns_api" "$credentials" "$test_mode"
-		) &
+		acmesh_task_spawn "$task_id" dns-test diagnostic acmesh_dns_test_log "$main_domain" "$dns_api" "$credentials" "$test_mode" || exit 1
 		if [ "$test_mode" = 1 ] || [ "$test_mode" = true ]; then
 			printf '{"ok":true,"testMode":true,"taskId":"%s"}\n' "$(acmesh_json_escape "$task_id")"
 		else
@@ -608,17 +611,15 @@ case "$cmd" in
 		else
 			printf '{"ok":false,"error":"real issue requires profileId"}\n'; exit 2
 		fi
-		(
-			log_credentials="$(acmesh_redact_credentials "$credentials")"
-			command="$(acmesh_build_issue_command "$home" "$main_domain" "$key_type" "$validation_method" "$dns_api" "$webroot" "$listen_port" "$log_credentials" "$ca" "$account_email")"
-			if [ "$test_mode" = 1 ] || [ "$test_mode" = true ]; then
-				acmesh_task_run "$task_id" issue-test test-mode printf '%s\n%s\n' \
-					"TEST MODE: generated acme.sh command, but no real ACME request was sent." \
-					"$(acmesh_mask_secret "$command")"
-			else
-				acmesh_task_run "$task_id" issue acme-sh acmesh_execute_issue "$home" "$main_domain" "$key_type" "$validation_method" "$dns_api" "$webroot" "$listen_port" "$credentials" "$ca" "$account_email"
-			fi
-		) &
+		log_credentials="$(acmesh_redact_credentials "$credentials")"
+		command="$(acmesh_build_issue_command "$home" "$main_domain" "$key_type" "$validation_method" "$dns_api" "$webroot" "$listen_port" "$log_credentials" "$ca" "$account_email")"
+		if [ "$test_mode" = 1 ] || [ "$test_mode" = true ]; then
+			acmesh_task_spawn "$task_id" issue-test test-mode printf '%s\n%s\n' \
+				"TEST MODE: generated acme.sh command, but no real ACME request was sent." \
+				"$(acmesh_mask_secret "$command")" || exit 1
+		else
+			acmesh_task_spawn "$task_id" issue acme-sh acmesh_execute_issue "$home" "$main_domain" "$key_type" "$validation_method" "$dns_api" "$webroot" "$listen_port" "$credentials" "$ca" "$account_email" || exit 1
+		fi
 		if [ "$test_mode" = 1 ] || [ "$test_mode" = true ]; then
 			printf '{"ok":true,"testMode":true,"taskId":"%s"}\n' "$(acmesh_json_escape "$task_id")"
 		else

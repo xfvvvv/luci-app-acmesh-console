@@ -215,13 +215,16 @@ acmesh_operation_admit() {
 			task_id="$(acmesh_task_create issue-profile)"; workspace="$(acmesh_task_workspace "$task_id")"; task_resolved="$workspace/issue-profile.json"
 			[ -f "$ACMESH_OPERATION_RESOLVED_FILE" ] && [ ! -L "$ACMESH_OPERATION_RESOLVED_FILE" ] || return 1
 			cp "$ACMESH_OPERATION_RESOLVED_FILE" "$task_resolved" && chmod 600 "$task_resolved" || return 1
-			( ACMESH_OPERATION_USE_RESOLVED=1; export ACMESH_OPERATION_USE_RESOLVED; acmesh_task_run "$task_id" issue acme-sh acmesh_run_issue_profile "$subject_id" "$task_resolved" "$ACMESH_ACME_HOME" ) & ;;
+			ACMESH_OPERATION_USE_RESOLVED=1; export ACMESH_OPERATION_USE_RESOLVED
+			acmesh_task_spawn "$task_id" issue acme-sh acmesh_run_issue_profile "$subject_id" "$task_resolved" "$ACMESH_ACME_HOME" || return 1 ;;
 		deploy-run:deployProfile)
 			acmesh_operation_consume_conversion_grant "$subject_id" || return 1
 			task_id="$(acmesh_task_create deploy-profile)"; workspace="$(acmesh_task_workspace "$task_id")"; task_resolved="$workspace/deploy-profile.json"
 			[ -f "$ACMESH_OPERATION_RESOLVED_FILE" ] && [ ! -L "$ACMESH_OPERATION_RESOLVED_FILE" ] || return 1
 			cp "$ACMESH_OPERATION_RESOLVED_FILE" "$task_resolved" && chmod 600 "$task_resolved" || return 1
-			( ACMESH_DEPLOY_ALLOW_KEY_CONVERT=1 ACMESH_OPERATION_USE_RESOLVED=1; export ACMESH_DEPLOY_ALLOW_KEY_CONVERT ACMESH_OPERATION_USE_RESOLVED; acmesh_task_run "$task_id" deploy-run deploy acmesh_run_deploy_profile "$subject_id" "$task_resolved" ) & ;;
+			ACMESH_DEPLOY_ALLOW_KEY_CONVERT=1 ACMESH_OPERATION_USE_RESOLVED=1
+			export ACMESH_DEPLOY_ALLOW_KEY_CONVERT ACMESH_OPERATION_USE_RESOLVED
+			acmesh_task_spawn "$task_id" deploy-run deploy acmesh_run_deploy_profile "$subject_id" "$task_resolved" || return 1 ;;
 		ssh-key-convert:sshKey)
 			if [ "$decision" = once ]; then
 				tmp="$(acmesh_operation_conversion_grant_path "$subject_id")"; acmesh_private_dir "${tmp%/*}" || return 1
@@ -234,9 +237,9 @@ acmesh_operation_admit() {
 			ACMESH_OPERATION_TASK_ID=; export ACMESH_OPERATION_TASK_ID; return 0 ;;
 		renew:certificate)
 			task_id="$(acmesh_task_create renew)"; workspace="$(acmesh_task_workspace "$task_id")"
-			( acmesh_task_run "$task_id" renew acme-sh acmesh_operation_run_renew "$subject_id" "$ACMESH_OPERATION_FINGERPRINT" "$workspace" ) & ;;
-		core-install:global) task_id="$(acmesh_task_create core-install)"; ( acmesh_task_run "$task_id" core-install install acmesh_execute_core_install "$ACMESH_AUTH_ACME_HOME" "$ACMESH_AUTH_CORE_EMAIL" "$ACMESH_AUTH_CORE_TAG" ) & ;;
-		core-upgrade:global) task_id="$(acmesh_task_create core-upgrade)"; ( acmesh_task_run "$task_id" core-upgrade upgrade acmesh_execute_core_upgrade "$ACMESH_AUTH_ACME_HOME" "$ACMESH_AUTH_CORE_TAG" ) & ;;
+			acmesh_task_spawn "$task_id" renew acme-sh acmesh_operation_run_renew "$subject_id" "$ACMESH_OPERATION_FINGERPRINT" "$workspace" || return 1 ;;
+		core-install:global) task_id="$(acmesh_task_create core-install)"; acmesh_task_spawn "$task_id" core-install install acmesh_execute_core_install "$ACMESH_AUTH_ACME_HOME" "$ACMESH_AUTH_CORE_EMAIL" "$ACMESH_AUTH_CORE_TAG" || return 1 ;;
+		core-upgrade:global) task_id="$(acmesh_task_create core-upgrade)"; acmesh_task_spawn "$task_id" core-upgrade upgrade acmesh_execute_core_upgrade "$ACMESH_AUTH_ACME_HOME" "$ACMESH_AUTH_CORE_TAG" || return 1 ;;
 		import-apply:pendingImport)
 			[ "$decision" = once ] || return 2
 			ACMESH_OPERATION_TASK_ID=; export ACMESH_OPERATION_TASK_ID; return 0 ;;
@@ -244,7 +247,7 @@ acmesh_operation_admit() {
 			ACMESH_OPERATION_TASK_ID=; export ACMESH_OPERATION_TASK_ID; return 0 ;;
 		certificate-revoke:certificate|certificate-remove:certificate)
 			task_id="$(acmesh_task_create "$operation")"; workspace="$(acmesh_task_workspace "$task_id")"
-			( acmesh_task_run "$task_id" "$operation" acme-sh acmesh_operation_run_certificate_destructive "$operation" "$subject_id" "$ACMESH_OPERATION_FINGERPRINT" "$workspace" ) & ;;
+			acmesh_task_spawn "$task_id" "$operation" acme-sh acmesh_operation_run_certificate_destructive "$operation" "$subject_id" "$ACMESH_OPERATION_FINGERPRINT" "$workspace" || return 1 ;;
 		profile-delete:profile)
 			[ "$decision" = once ] || return 2
 			ACMESH_OPERATION_TASK_ID=; export ACMESH_OPERATION_TASK_ID; return 0 ;;

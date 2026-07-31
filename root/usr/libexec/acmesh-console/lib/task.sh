@@ -198,6 +198,32 @@ acmesh_task_create() {
 	acmesh_lock_run "$(acmesh_task_lock_file)" acmesh_task_create_unlocked "$operation"
 }
 
+# CGI workers must not remain attached to the request process.  uhttpd can
+# send SIGHUP when that process exits, which would otherwise interrupt a
+# newly-started worker while it is still opening its private input snapshot.
+# Run the worker through the internal acmeshctl entry point in a new session;
+# the task runner itself still owns all task logging and state transitions.
+acmesh_task_spawn() {
+	[ "$#" -ge 4 ] || return 2
+	setsid_bin="${ACMESH_SETSID_BIN:-setsid}"
+	if ! command -v "$setsid_bin" >/dev/null 2>&1; then
+		echo "Required session runner is unavailable: setsid" >&2
+		return 127
+	fi
+	if [ -n "${ACMESH_TASK_WORKER_BIN:-}" ]; then
+		worker_bin="$ACMESH_TASK_WORKER_BIN"
+	elif [ -n "${ACMESH_LIB_DIR:-}" ]; then
+		worker_bin="${ACMESH_LIB_DIR%/}/../acmeshctl"
+	else
+		worker_bin=/usr/libexec/acmesh-console/acmeshctl
+	fi
+	[ -f "$worker_bin" ] && [ ! -L "$worker_bin" ] || {
+		echo "Task worker entry point is unavailable" >&2
+		return 127
+	}
+	"$setsid_bin" sh "$worker_bin" __task-worker "$@" </dev/null >/dev/null 2>&1 &
+}
+
 acmesh_task_status() {
 	id="$1"
 	if ! acmesh_task_validate_id "$id"; then
