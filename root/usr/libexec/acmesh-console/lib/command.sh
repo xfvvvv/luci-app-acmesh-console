@@ -358,6 +358,10 @@ acmesh_execute_renew() {
 		printf 'acme.sh not found in %s or PATH\n' "$home" >&2
 		return 127
 	}
+	deploy_id="$(acmesh_profile_find_linked_deploy "$main_domain" "$key_type" 2>/dev/null || true)"
+	if [ -n "$deploy_id" ]; then
+		acmesh_deploy_install_acme_hooks "$home" || { echo "unable to install acme.sh deploy hook" >&2; return 1; }
+	fi
 	command="$(acmesh_build_renew_command "$home" "$main_domain" "$key_type")"
 	printf 'REAL MODE: executing acme.sh renew\n'
 	printf '%s\n' "$command"

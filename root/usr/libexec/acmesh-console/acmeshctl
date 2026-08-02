@@ -130,16 +130,19 @@ acmesh_run_issue_profile() (
 	acmesh_profile_install_cleanup_traps "$resolved_file"
 	if [ "${ACMESH_OPERATION_USE_RESOLVED:-0}" != 1 ]; then acmesh_profile_resolve_issue "$profile_id" "$resolved_file" || return 1; fi
 	acmesh_profile_load_issue_file "$resolved_file" || return 1
+	deploy_id="$(jsonfilter -i "$resolved_file" -e '@.deployProfileId' 2>/dev/null || true)"
 	log_credentials="$(acmesh_redact_credentials "$ACMESH_PROFILE_CREDENTIALS")"
 	command="$(acmesh_build_issue_command "$profile_home" "$ACMESH_PROFILE_DOMAIN" "$ACMESH_PROFILE_KEY_TYPE" "$ACMESH_PROFILE_VALIDATION" "$ACMESH_PROFILE_DNS_API" "$ACMESH_PROFILE_WEBROOT" "$ACMESH_PROFILE_LISTEN_PORT" "$log_credentials" "$ACMESH_PROFILE_CA" "$ACMESH_PROFILE_ACCOUNT_EMAIL" "$ACMESH_PROFILE_DOMAINS" "$ACMESH_PROFILE_CHALLENGE_ALIAS" "$ACMESH_PROFILE_DNS_SLEEP")"
 	if [ "$ACMESH_PROFILE_TEST_MODE" = true ]; then
 		printf '%s\n%s\n' 'TEST MODE: generated acme.sh command, but no real ACME request was sent.' "$(acmesh_mask_secret "$command")"
 	else
+		if [ -n "$deploy_id" ]; then
+			acmesh_deploy_install_acme_hooks "$profile_home" || { echo "unable to install acme.sh deploy hook" >&2; return 1; }
+		fi
 		acmesh_execute_issue "$profile_home" "$ACMESH_PROFILE_DOMAIN" "$ACMESH_PROFILE_KEY_TYPE" "$ACMESH_PROFILE_VALIDATION" "$ACMESH_PROFILE_DNS_API" "$ACMESH_PROFILE_WEBROOT" "$ACMESH_PROFILE_LISTEN_PORT" "$ACMESH_PROFILE_CREDENTIALS" "$ACMESH_PROFILE_CA" "$ACMESH_PROFILE_ACCOUNT_EMAIL" "$ACMESH_PROFILE_DOMAINS" "$ACMESH_PROFILE_CHALLENGE_ALIAS" "$ACMESH_PROFILE_DNS_SLEEP" || return $?
-		deploy_id="$(jsonfilter -i "$resolved_file" -e '@.deployProfileId' 2>/dev/null || true)"
 		if [ -n "$deploy_id" ]; then
 			script="$(acmesh_find_script "$profile_home")" || return 1
-			ACMESH_DEPLOY_PROFILE_ID="$deploy_id" "$script" --home "$profile_home" --deploy -d "$ACMESH_PROFILE_DOMAIN" --deploy-hook acmesh-console-ssh
+			ACMESH_DEPLOY_PROFILE_ID="$deploy_id" "$script" --home "$profile_home" --deploy -d "$ACMESH_PROFILE_DOMAIN" --deploy-hook "$ACMESH_CONSOLE_DEPLOY_HOOK_NAME"
 		fi
 	fi
 )

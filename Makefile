@@ -5,7 +5,7 @@ LUCI_DEPENDS:=+luci-base +rpcd +rpcd-mod-file +busybox +jsonfilter +openssl-util
 
 PKG_NAME:=luci-app-acmesh-console
 PKG_VERSION:=0.1.0
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 PKG_LICENSE:=GPL-3.0-or-later
 
 # Windows/DrvFS checkouts report every source entry as 0777. APK packaging

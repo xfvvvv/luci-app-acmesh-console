@@ -6,6 +6,47 @@ if ! command -v acmesh_task_workspace >/dev/null 2>&1; then
 	. "${ACMESH_LIB_DIR:-/usr/libexec/acmesh-console/lib}/io.sh"
 fi
 
+: "${ACMESH_CONSOLE_DEPLOY_HOOK_NAME:=acmesh-console-ssh}"
+: "${ACMESH_CONSOLE_DEPLOY_HOOK_CANONICAL_NAME:=acmesh_console_ssh}"
+
+acmesh_deploy_hook_source_path() {
+	printf '%s\n' "${ACMESH_CONSOLE_HOOK_SOURCE:-/usr/libexec/acmesh-console/hooks/acmesh-console-ssh.sh}"
+}
+
+acmesh_deploy_install_acme_hook() (
+	home="$1" hook_name="$2" legacy="$3"
+	source_path="$(acmesh_deploy_hook_source_path)"
+	case "$home" in /*) ;; *) return 2 ;; esac
+	case "$hook_name" in [A-Za-z0-9_-]*) ;; *) return 2 ;; esac
+	[ -r "$source_path" ] && [ ! -L "$source_path" ] || return 1
+	hook_dir="$home/deploy"
+	[ ! -L "$hook_dir" ] || return 1
+	mkdir -p "$hook_dir" || return 1
+	[ ! -L "$hook_dir" ] || return 1
+	hook_path="$hook_dir/$hook_name.sh"
+	[ ! -L "$hook_path" ] || return 1
+	[ ! -e "$hook_path" ] || [ -f "$hook_path" ] || return 1
+	tmp_path="$hook_path.tmp.$$"
+	[ ! -e "$tmp_path" ] || return 1
+	umask 077
+	{
+		printf '%s\n' '#!/bin/sh' 'set -eu'
+		printf '%s\n' 'ACMESH_CONSOLE_HOOK_SOURCED=1' 'export ACMESH_CONSOLE_HOOK_SOURCED'
+		if [ "$legacy" = 1 ]; then
+			printf '%s\n' 'ACMESH_CONSOLE_HOOK_LEGACY=1' 'export ACMESH_CONSOLE_HOOK_LEGACY'
+		fi
+		printf '. %s\n' "$(acmesh_shell_quote "$source_path")"
+	} > "$tmp_path" || { rm -f "$tmp_path"; return 1; }
+	chmod 0755 "$tmp_path" || { rm -f "$tmp_path"; return 1; }
+	mv -f "$tmp_path" "$hook_path" || { rm -f "$tmp_path"; return 1; }
+)
+
+acmesh_deploy_install_acme_hooks() (
+	home="$1"
+	acmesh_deploy_install_acme_hook "$home" "$ACMESH_CONSOLE_DEPLOY_HOOK_CANONICAL_NAME" 0 || return 1
+	acmesh_deploy_install_acme_hook "$home" "$ACMESH_CONSOLE_DEPLOY_HOOK_NAME" 1 || return 1
+)
+
 acmesh_build_install_cert_command() {
 	domain="$1"
 	key_file="$2"

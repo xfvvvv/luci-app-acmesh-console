@@ -215,6 +215,9 @@ LuCI → 服务 → acme.sh Console
 7. 核对风险摘要后执行真实签发或部署；
 8. 在任务页面查看阶段、结果和脱敏日志。
 
+如果签发配置关联了部署配置，控制台会在对应的 `acmeHome/deploy/` 中自动注册
+`acmesh-console-ssh` hook（同时保留 `acmesh_console_ssh` 兼容入口），因此不需要手动复制 hook 文件。
+
 ### 测试模式与 Let's Encrypt Staging
 
 测试模式是完全不产生外部变更的命令验证路径。它不得发送 ACME 请求、修改 DNS、部署文件、重载服务、消耗挑战或创建可记忆授权。
