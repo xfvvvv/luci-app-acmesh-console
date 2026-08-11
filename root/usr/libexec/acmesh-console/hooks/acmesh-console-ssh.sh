@@ -1,5 +1,10 @@
 #!/bin/sh
-set -eu
+
+# This file is sourced by acme.sh.  Preserve the caller's shell options when
+# sourced, but retain strict mode for direct diagnostic execution.
+if [ "${ACMESH_CONSOLE_HOOK_SOURCED:-0}" != 1 ]; then
+	set -eu
+fi
 
 ACMESH_LIB_DIR="${ACMESH_LIB_DIR:-/usr/libexec/acmesh-console/lib}"
 export ACMESH_LIB_DIR

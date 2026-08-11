@@ -30,7 +30,9 @@ acmesh_deploy_install_acme_hook() (
 	[ ! -e "$tmp_path" ] || return 1
 	umask 077
 	{
-		printf '%s\n' '#!/bin/sh' 'set -eu'
+		# acme.sh sources deploy hooks into its own shell.  Do not change its
+		# shell options: in particular, set -u breaks acme.sh's optional vars.
+		printf '%s\n' '#!/bin/sh'
 		printf '%s\n' 'ACMESH_CONSOLE_HOOK_SOURCED=1' 'export ACMESH_CONSOLE_HOOK_SOURCED'
 		if [ "$legacy" = 1 ]; then
 			printf '%s\n' 'ACMESH_CONSOLE_HOOK_LEGACY=1' 'export ACMESH_CONSOLE_HOOK_LEGACY'

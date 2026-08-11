@@ -18,8 +18,25 @@ for hook in acmesh_console_ssh acmesh-console-ssh; do
 	[ -f "$path" ] && [ ! -L "$path" ]
 	[ "$(LC_ALL=C ls -l "$path" | awk '{print $1}')" = -rwxr-xr-x ]
 	grep -F 'ACMESH_CONSOLE_HOOK_SOURCED=1' "$path" >/dev/null
+	if grep -Eq '^[[:space:]]*set[[:space:]]+' "$path"; then
+		echo "deploy hook wrapper must not alter acme.sh shell options"
+		exit 1
+	fi
 	sh -n "$path"
 done
+
+# Sourcing the wrapper must not enable nounset in acme.sh's shell, including
+# while the wrapper sources the shared hook implementation.
+if ! sh -c '
+	unset ACMESH_HOOK_UNSET_SENTINEL
+	ACMESH_CONSOLE_HOOK_SOURCED=1
+	export ACMESH_CONSOLE_HOOK_SOURCED
+	. "$1"
+	: "$ACMESH_HOOK_UNSET_SENTINEL"
+' sh "$TMP/home/deploy/acmesh_console_ssh.sh" 2>/dev/null; then
+	echo "deploy hook source path must preserve acme.sh shell options"
+	exit 1
+fi
 
 # The canonical wrapper must be sourceable by the POSIX shell used by acme.sh
 # and must expose the function acme.sh invokes after sourcing a deploy hook.

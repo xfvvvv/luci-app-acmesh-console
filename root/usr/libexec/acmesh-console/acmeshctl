@@ -140,10 +140,8 @@ acmesh_run_issue_profile() (
 			acmesh_deploy_install_acme_hooks "$profile_home" || { echo "unable to install acme.sh deploy hook" >&2; return 1; }
 		fi
 		acmesh_execute_issue "$profile_home" "$ACMESH_PROFILE_DOMAIN" "$ACMESH_PROFILE_KEY_TYPE" "$ACMESH_PROFILE_VALIDATION" "$ACMESH_PROFILE_DNS_API" "$ACMESH_PROFILE_WEBROOT" "$ACMESH_PROFILE_LISTEN_PORT" "$ACMESH_PROFILE_CREDENTIALS" "$ACMESH_PROFILE_CA" "$ACMESH_PROFILE_ACCOUNT_EMAIL" "$ACMESH_PROFILE_DOMAINS" "$ACMESH_PROFILE_CHALLENGE_ALIAS" "$ACMESH_PROFILE_DNS_SLEEP" || return $?
-		if [ -n "$deploy_id" ]; then
-			script="$(acmesh_find_script "$profile_home")" || return 1
-			ACMESH_DEPLOY_PROFILE_ID="$deploy_id" "$script" --home "$profile_home" --deploy -d "$ACMESH_PROFILE_DOMAIN" --deploy-hook "$ACMESH_CONSOLE_DEPLOY_HOOK_NAME"
-		fi
+		# Initial deployment is a separate, explicitly authorized operation in
+		# LuCI.  The installed hook remains available for acme.sh renewals.
 	fi
 )
 

@@ -41,6 +41,8 @@ The browser submits an operation intent, while the router backend reloads the sa
 
 Real issuance, renewal, deployment, core installation or upgrade, temporary SSH key conversion and sensitive configuration export require explicit authorization. Revocation, certificate removal, profile deletion and overwrite imports always require a one-time decision.
 
+When an issue profile links a deploy profile, the initial certificate issue and the subsequent deployment remain separate authorized operations. The installed `acmesh-console-ssh` hook is used by later `acme.sh` renewals and never bypasses deploy authorization.
+
 There is no global test mode, debug bypass, `--yes`, `--force-all` or disable-confirmations switch. Test mode performs command validation without ACME requests, DNS changes, file deployment, service reloads or remembered authorization. Let's Encrypt Staging remains a real remote ACME service and is not treated as test mode.
 
 Private state is stored under `/etc/acmesh-console` using `0700` directories and `0600` private files. Remembered authorization and pinned SSH identities stay local to the router and are deliberately excluded from configuration migration.
@@ -217,6 +219,7 @@ LuCI → 服务 → acme.sh Console
 
 如果签发配置关联了部署配置，控制台会在对应的 `acmeHome/deploy/` 中自动注册
 `acmesh-console-ssh` hook（同时保留 `acmesh_console_ssh` 兼容入口），因此不需要手动复制 hook 文件。
+首次签发完成后，控制台会按独立的部署授权启动 deploy 任务；后续 `acme.sh` 续期才由该 hook 触发部署，且始终要求匹配的部署授权。
 
 ### 测试模式与 Let's Encrypt Staging
 
