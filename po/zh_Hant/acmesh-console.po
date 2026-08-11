@@ -111,8 +111,11 @@ msgstr "目標"
 msgid "Reload command"
 msgstr "重新載入指令"
 
-msgid "Run"
-msgstr "執行"
+msgid "Issue"
+msgstr "簽發"
+
+msgid "Issue and deploy"
+msgstr "簽發並部署"
 
 msgid "DNS Test"
 msgstr "DNS 測試"

@@ -152,7 +152,7 @@ Cosmetic fields such as profile display name, description, and UI sort order are
 
 Fingerprint fields:
 
-- operation (`issue` and `renew` are distinct);
+- operation (`issue`, `issue-deploy`, and `renew` are distinct);
 - account profile identifier and selected CA/directory;
 - normalized primary domain and complete SAN set;
 - key type and key length;
@@ -160,8 +160,14 @@ Fingerprint fields:
 - DNS provider API identifier;
 - DNS alias/challenge alias and propagation behavior;
 - webroot, standalone, or ALPN binding fields when applicable;
-- linked deploy profile identifier and its current material fingerprint;
-- global test/real mode. Test mode itself does not require authorization.
+- linked deploy profile identifier; for `issue-deploy`, its current material fingerprint and deployment fields;
+- explicit issue-profile test/real policy. Test mode itself does not require authorization.
+
+`issue-deploy` is a single authorized operation when the operator chooses the
+combined action. Its canonical snapshot contains the issue fields and the
+linked deploy fields, and one admitted task performs issuance followed by
+deployment. It must not call the independent `deploy-run` authorization after
+issuance succeeds.
 
 ### Deploy
 
@@ -266,6 +272,7 @@ Immediately before task creation, the backend resolves all references and recomp
 | Status, logs, preview | No prompt | N/A | No | Read-only ACL only |
 | DNS configuration validation | No prompt | N/A | No | Must not call provider mutation APIs |
 | Real issue | N/A | Yes | Yes | CA and all domains shown |
+| Real issue and deploy | N/A | Yes | Yes | One challenge covers issuance and linked deployment |
 | Real renew | N/A | Yes | Yes | Separate operation from issue |
 | Local deploy | N/A | Yes | Yes | Destination paths and reload shown |
 | Remote SSH deploy | N/A | Yes | Yes | Host key must already be pinned or confirmed in flow |
@@ -276,7 +283,9 @@ Immediately before task creation, the backend resolves all references and recomp
 | Export with secrets | N/A | Yes | Yes | Authorization changes with config digest |
 | Revoke, remove, delete | N/A | Yes | No | Always one-time |
 
-Global test mode generates and validates the acme.sh command but performs no real ACME request, DNS mutation, deployment, or remote reload. It never consumes or creates an authorization.
+An issue profile's explicit test-mode policy generates and validates the
+acme.sh command but performs no real ACME request, DNS mutation, deployment,
+or remote reload. It never consumes or creates an authorization.
 
 ## LuCI Interaction
 

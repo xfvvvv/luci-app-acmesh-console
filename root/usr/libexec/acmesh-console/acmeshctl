@@ -145,6 +145,31 @@ acmesh_run_issue_profile() (
 	fi
 )
 
+acmesh_run_issue_deploy_profile() (
+	issue_profile_id="$1" issue_resolved_file="$2" deploy_resolved_file="$3" profile_home="$4"
+	cleanup_resolved() { rm -f -- "$issue_resolved_file" "$deploy_resolved_file"; }
+	trap cleanup_resolved EXIT
+	trap 'cleanup_resolved; exit 129' HUP
+	trap 'cleanup_resolved; exit 130' INT
+	trap 'cleanup_resolved; exit 143' TERM
+	if [ "${ACMESH_OPERATION_USE_RESOLVED:-0}" != 1 ]; then
+		acmesh_profile_resolve_issue "$issue_profile_id" "$issue_resolved_file" || return 1
+		deploy_id="$(jsonfilter -i "$issue_resolved_file" -e '@.deployProfileId' 2>/dev/null || true)"
+		[ -n "$deploy_id" ] || return 1
+		acmesh_profile_resolve_deploy "$deploy_id" "$deploy_resolved_file" || return 1
+	fi
+	acmesh_profile_load_issue_file "$issue_resolved_file" || return 1
+	issue_test_mode="$ACMESH_PROFILE_TEST_MODE"
+	acmesh_run_issue_profile "$issue_profile_id" "$issue_resolved_file" "$profile_home" || return $?
+	[ "$issue_test_mode" = true ] && return 0
+	acmesh_profile_load_deploy_file "$deploy_resolved_file" || return 1
+	acmesh_execute_profile_deploy "$ACMESH_DEPLOY_TYPE" "$ACMESH_DEPLOY_CERT_SOURCE" "$ACMESH_DEPLOY_DOMAIN" \
+		"$ACMESH_DEPLOY_KEY_FILE" "$ACMESH_DEPLOY_CHAIN_FILE" "$ACMESH_DEPLOY_CERT_FILE" "$ACMESH_DEPLOY_CA_FILE" "$ACMESH_DEPLOY_RELOAD" \
+		"$ACMESH_DEPLOY_SOURCE_KEY" "$ACMESH_DEPLOY_SOURCE_CHAIN" "$ACMESH_DEPLOY_KEY_PEM" "$ACMESH_DEPLOY_CHAIN_PEM" \
+		"$ACMESH_DEPLOY_HOST" "$ACMESH_DEPLOY_PORT" "$ACMESH_DEPLOY_USER" "$ACMESH_DEPLOY_SSH_KEY" "$ACMESH_DEPLOY_KEY_TYPE" \
+		"$ACMESH_DEPLOY_SUDO_MODE" "$ACMESH_DEPLOY_OWNER" "$ACMESH_DEPLOY_GROUP" "$ACMESH_DEPLOY_MODE"
+)
+
 acmesh_run_deploy_profile() (
 	profile_id="$1" resolved_file="$2"
 	acmesh_profile_install_cleanup_traps "$resolved_file"
@@ -626,6 +651,18 @@ case "$cmd" in
 		else
 			printf '{"ok":true,"taskId":"%s"}\n' "$(acmesh_json_escape "$task_id")"
 		fi
+		;;
+	issue-deploy)
+		profile_id=""
+		while [ "$#" -gt 0 ]; do
+			case "$1" in
+				--profile-id) profile_id="$2"; shift 2 ;;
+				*) shift ;;
+			esac
+		done
+		[ -n "$request_file" ] && profile_id="$(acmesh_request_value "$request_file" profileId "$profile_id")"
+		acmesh_profile_validate_id "$profile_id" || { printf '{"ok":false,"error":"invalid issue profile id"}\n'; exit 2; }
+		acmesh_operation_start issue-deploy issueProfile "$profile_id" "$request_file"
 		;;
 	authorization-list)
 		ACMESH_AUTH_RECOMPUTE_CALLBACK=acmesh_operation_recompute

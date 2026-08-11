@@ -5,7 +5,7 @@
 # challenge and are never trusted by authorization_execute.
 acmesh_operation_subject_type() {
 	case "$1" in
-		issue) printf '%s\n' issueProfile ;;
+		issue|issue-deploy) printf '%s\n' issueProfile ;;
 		renew) printf '%s\n' certificate ;;
 		deploy-run) printf '%s\n' deployProfile ;;
 		core-install|core-upgrade) printf '%s\n' global ;;
@@ -34,7 +34,7 @@ acmesh_operation_snapshot_reset() {
 }
 
 acmesh_operation_snapshot_issue() {
-	local issue_profile_id="$1" issue_out="$2" issue_summary="$3" issue_resolved="$4"
+	local issue_profile_id="$1" issue_out="$2" issue_summary="$3" issue_resolved="$4" issue_operation="${5:-issue}"
 	local issue_deploy_id issue_deploy_fingerprint deploy_snapshot deploy_summary deploy_resolved
 	acmesh_operation_snapshot_reset
 	acmesh_profile_resolve_issue "$issue_profile_id" "$issue_resolved" || return 1
@@ -48,13 +48,14 @@ acmesh_operation_snapshot_issue() {
 	ACMESH_AUTH_LISTEN_PORT="$ACMESH_PROFILE_LISTEN_PORT" ACMESH_AUTH_DEPLOY_PROFILE_ID="$(jsonfilter -i "$issue_resolved" -e '@.deployProfileId' 2>/dev/null || true)"
 	ACMESH_AUTH_TEST_MODE=false
 	issue_deploy_id="$ACMESH_AUTH_DEPLOY_PROFILE_ID" issue_deploy_fingerprint=
-	if [ -n "$ACMESH_AUTH_DEPLOY_PROFILE_ID" ]; then
+	if [ "$issue_operation" = issue-deploy ] && [ -n "$ACMESH_AUTH_DEPLOY_PROFILE_ID" ]; then
 		deploy_snapshot="${issue_out}.linked-deploy" deploy_summary="${issue_out}.linked-summary" deploy_resolved="${issue_out}.linked-resolved"
 		acmesh_operation_snapshot_deploy "$ACMESH_AUTH_DEPLOY_PROFILE_ID" "$deploy_snapshot" "$deploy_summary" "$deploy_resolved" || return 1
 		issue_deploy_fingerprint="$(acmesh_auth_fingerprint "$deploy_snapshot")"
 		# Restore issue fields overwritten while resolving linked deployment.
 		acmesh_profile_load_issue_file "$issue_resolved" || return 1
 	fi
+	[ "$issue_operation" != issue-deploy ] || [ -n "$issue_deploy_id" ] || return 1
 	ACMESH_AUTH_ACCOUNT_ID="$(jsonfilter -i "$issue_resolved" -e '@.accountId')"
 	ACMESH_AUTH_ACCOUNT_EMAIL="$ACMESH_PROFILE_ACCOUNT_EMAIL" ACMESH_AUTH_CA="$ACMESH_PROFILE_CA"
 	ACMESH_AUTH_PRIMARY_DOMAIN="$ACMESH_PROFILE_DOMAIN" ACMESH_AUTH_DOMAINS="$ACMESH_PROFILE_DOMAINS"
@@ -66,7 +67,7 @@ acmesh_operation_snapshot_issue() {
 	export ACMESH_AUTH_ACCOUNT_ID ACMESH_AUTH_ACCOUNT_EMAIL ACMESH_AUTH_CA ACMESH_AUTH_PRIMARY_DOMAIN ACMESH_AUTH_DOMAINS ACMESH_AUTH_KEY_TYPE ACMESH_AUTH_VALIDATION ACMESH_AUTH_DNS_API ACMESH_AUTH_CREDENTIAL_MODE ACMESH_AUTH_CREDENTIAL_KEYS ACMESH_AUTH_CHALLENGE_ALIAS ACMESH_AUTH_DNS_SLEEP ACMESH_AUTH_WEBROOT ACMESH_AUTH_LISTEN_PORT ACMESH_AUTH_DEPLOY_PROFILE_ID ACMESH_AUTH_TEST_MODE
 	export ACMESH_AUTH_DEPLOY_FINGERPRINT
 	ACMESH_OPERATION_RESOLVED_FILE="$issue_resolved"; export ACMESH_OPERATION_RESOLVED_FILE
-	acmesh_auth_snapshot issue issueProfile "$issue_profile_id" "$issue_out" && acmesh_auth_summary "$issue_out" "$issue_summary"
+	acmesh_auth_snapshot "$issue_operation" issueProfile "$issue_profile_id" "$issue_out" && acmesh_auth_summary "$issue_out" "$issue_summary"
 }
 
 acmesh_operation_snapshot_deploy() {
@@ -123,6 +124,31 @@ acmesh_operation_snapshot_conversion() {
 }
 
 acmesh_operation_conversion_grant_path() { printf '%s/.conversion-once.%s\n' "$ACMESH_AUTH_CHALLENGE_DIR" "$1"; }
+acmesh_operation_conversion_continuation_path() {
+	parent_operation="$1" conversion_subject="$2"
+	acmesh_auth_valid_id "$conversion_subject" || return 2
+	printf '%s/.conversion-continuation.%s.%s\n' "$ACMESH_AUTH_CHALLENGE_DIR" "$conversion_subject" "$parent_operation"
+}
+acmesh_operation_save_conversion_continuation() {
+	parent_operation="$1" parent_subject_id="$2" conversion_subject="$3"
+	path="$(acmesh_operation_conversion_continuation_path "$parent_operation" "$conversion_subject")" || return 1
+	acmesh_private_dir "${path%/*}" || return 1
+	acmesh_auth_valid_id "$parent_subject_id" || return 2
+	printf '%s\n%s\n' "$parent_operation" "$parent_subject_id" | acmesh_atomic_write "$path" 600
+}
+acmesh_operation_take_conversion_continuation() {
+	conversion_subject="$1"
+	for parent_operation in issue-deploy deploy-run; do
+		path="$(acmesh_operation_conversion_continuation_path "$parent_operation" "$conversion_subject")" || continue
+		[ -f "$path" ] && [ ! -L "$path" ] && acmesh_private_file_is_secure "$path" || continue
+		parent_subject_id="$(sed -n '2p' "$path")"
+		acmesh_auth_valid_id "$parent_subject_id" || { rm -f -- "$path"; continue; }
+		rm -f -- "$path"
+		printf '%s\n%s\n' "$parent_operation" "$parent_subject_id"
+		return 0
+	done
+	return 1
+}
 acmesh_operation_conversion_grant_valid() {
 	profile_id="$1" fingerprint="$2" now="$(acmesh_auth_now)" grant="$(acmesh_operation_conversion_grant_path "$profile_id")"
 	[ -f "$grant" ] && [ ! -L "$grant" ] && acmesh_private_file_is_secure "$grant" || return 1
@@ -150,7 +176,8 @@ acmesh_operation_recompute() {
 	local recompute_resolved="${4}.resolved"
 	local renew_snapshot renew_summary renew_domain renew_variant cert_dir cert_conf renew_ca renew_alt renew_key renew_webroot renew_validation renew_dns_api renew_domains renew_deploy_id renew_deploy_fingerprint deploy_snapshot candidate config_path destructive_domain destructive_variant destructive_dir destructive_conf profile_kind profile_id
 	case "$recompute_operation:$recompute_subject_type" in
-		issue:issueProfile) acmesh_operation_snapshot_issue "$recompute_subject_id" "$recompute_snapshot" "$recompute_summary" "$recompute_resolved" ;;
+		issue:issueProfile) acmesh_operation_snapshot_issue "$recompute_subject_id" "$recompute_snapshot" "$recompute_summary" "$recompute_resolved" issue ;;
+		issue-deploy:issueProfile) acmesh_operation_snapshot_issue "$recompute_subject_id" "$recompute_snapshot" "$recompute_summary" "$recompute_resolved" issue-deploy ;;
 		deploy-run:deployProfile) acmesh_operation_snapshot_deploy "$recompute_subject_id" "$recompute_snapshot" "$recompute_summary" "$recompute_resolved" ;;
 		ssh-key-convert:sshKey) acmesh_operation_snapshot_conversion "$recompute_subject_id" "$recompute_snapshot" "$recompute_summary" "$recompute_resolved" ;;
 		renew:certificate)
@@ -217,6 +244,18 @@ acmesh_operation_admit() {
 			cp "$ACMESH_OPERATION_RESOLVED_FILE" "$task_resolved" && chmod 600 "$task_resolved" || return 1
 			ACMESH_OPERATION_USE_RESOLVED=1; export ACMESH_OPERATION_USE_RESOLVED
 			acmesh_task_spawn "$task_id" issue acme-sh acmesh_run_issue_profile "$subject_id" "$task_resolved" "$ACMESH_ACME_HOME" || return 1 ;;
+		issue-deploy:issueProfile)
+			task_id="$(acmesh_task_create issue-deploy)"; workspace="$(acmesh_task_workspace "$task_id")"; task_resolved="$workspace/issue-profile.json"; deploy_resolved="$workspace/deploy-profile.json"
+			[ -f "$ACMESH_OPERATION_RESOLVED_FILE" ] && [ ! -L "$ACMESH_OPERATION_RESOLVED_FILE" ] || return 1
+			cp "$ACMESH_OPERATION_RESOLVED_FILE" "$task_resolved" && chmod 600 "$task_resolved" || return 1
+			deploy_id="$(jsonfilter -i "$task_resolved" -e '@.deployProfileId' 2>/dev/null || true)"
+			[ -n "$deploy_id" ] || return 1
+			acmesh_operation_consume_conversion_grant "$deploy_id" || return 1
+			acmesh_profile_resolve_deploy "$deploy_id" "$deploy_resolved" || return 1
+			chmod 600 "$deploy_resolved" || return 1
+			ACMESH_DEPLOY_ALLOW_KEY_CONVERT=1 ACMESH_OPERATION_USE_RESOLVED=1
+			export ACMESH_DEPLOY_ALLOW_KEY_CONVERT ACMESH_OPERATION_USE_RESOLVED
+			acmesh_task_spawn "$task_id" issue-deploy acme-sh acmesh_run_issue_deploy_profile "$subject_id" "$task_resolved" "$deploy_resolved" "$ACMESH_ACME_HOME" || return 1 ;;
 		deploy-run:deployProfile)
 			acmesh_operation_consume_conversion_grant "$subject_id" || return 1
 			task_id="$(acmesh_task_create deploy-profile)"; workspace="$(acmesh_task_workspace "$task_id")"; task_resolved="$workspace/deploy-profile.json"
@@ -322,6 +361,8 @@ acmesh_operation_start() {
 	export ACMESH_AUTH_RECOMPUTE_CALLBACK ACMESH_AUTH_ADMIT_CALLBACK ACMESH_AUTH_REQUIRE_REMEMBERED
 	recompute_rc=0; acmesh_operation_recompute "$op_start_operation" "$op_start_subject_type" "$op_start_subject_id" "$op_start_tmp/snapshot" "$op_start_tmp/summary" || recompute_rc=$?
 	if [ "$recompute_rc" = 6 ]; then
+		conversion_subject="${ACMESH_OPERATION_CONVERSION_SUBJECT:-$op_start_subject_id}"
+		acmesh_operation_save_conversion_continuation "$op_start_operation" "$op_start_subject_id" "$conversion_subject" || { rm -rf "$op_start_tmp"; trap - HUP INT TERM EXIT; return 1; }
 		rm -rf "$op_start_tmp"; trap - HUP INT TERM EXIT
 		acmesh_operation_start ssh-key-convert sshKey "${ACMESH_OPERATION_CONVERSION_SUBJECT:-$op_start_subject_id}" "$op_start_parameters_file"; return $?
 	fi
@@ -345,6 +386,14 @@ acmesh_operation_execute_challenge() {
 	rc=0; umask 077; acmesh_auth_execute "$challenge_id" "$decision" > "$op_execute_tmp/response" || rc=$?; chmod 600 "$op_execute_tmp/response" 2>/dev/null || true
 	if [ "$rc" = 0 ]; then case "${ACMESH_AUTH_EXECUTED_OPERATION:-}" in import-apply|secret-export|profile-delete) acmesh_operation_direct_dispatch "$ACMESH_AUTH_EXECUTED_OPERATION" "$ACMESH_AUTH_EXECUTED_SUBJECT_ID" > "$op_execute_tmp/response" || rc=$?;; esac; fi
 	if [ "$rc" = 0 ] && [ "${ACMESH_AUTH_EXECUTED_OPERATION:-}" = ssh-key-convert ]; then
+		continuation="$(acmesh_operation_take_conversion_continuation "$ACMESH_AUTH_EXECUTED_SUBJECT_ID" 2>/dev/null || true)"
+		if [ -n "$continuation" ]; then
+			parent_operation="$(printf '%s\n' "$continuation" | sed -n '1p')"
+			parent_subject_id="$(printf '%s\n' "$continuation" | sed -n '2p')"
+			rm -rf "$op_execute_tmp"
+			acmesh_operation_start "$parent_operation" "$(acmesh_operation_subject_type "$parent_operation")" "$parent_subject_id" "$request_file"
+			return $?
+		fi
 		rm -rf "$op_execute_tmp"; acmesh_operation_start deploy-run deployProfile "$ACMESH_AUTH_EXECUTED_SUBJECT_ID" "$request_file"; return $?
 	elif [ "$rc" = 0 ] && [ -f "$op_execute_tmp/result" ]; then cat "$op_execute_tmp/result"; else cat "$op_execute_tmp/response"; fi
 	rm -rf "$op_execute_tmp"

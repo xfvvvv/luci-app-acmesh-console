@@ -15,6 +15,7 @@ case "$method" in
 	import_apply) command=import-apply ;;
 	secret_export) command=secret-export ;;
 	issue) command=issue ;;
+	issue_deploy) command=issue-deploy ;;
 	renew) command=renew ;;
 	deploy_run) command=deploy-run ;;
 	deploy_test) command=deploy-test ;;

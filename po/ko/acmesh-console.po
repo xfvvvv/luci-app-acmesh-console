@@ -111,8 +111,11 @@ msgstr "대상"
 msgid "Reload command"
 msgstr "다시 로드 명령"
 
-msgid "Run"
-msgstr "실행"
+msgid "Issue"
+msgstr "발급"
+
+msgid "Issue and deploy"
+msgstr "발급 및 배포"
 
 msgid "DNS Test"
 msgstr "DNS 테스트"

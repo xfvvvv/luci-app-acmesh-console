@@ -7,7 +7,13 @@ CERTS="$ROOT/htdocs/luci-static/resources/view/acmesh/certificates_v2.js"
 
 require() { grep -Fq -- "$2" "$1" || { echo "missing execution contract: $2"; exit 1; }; }
 
-require "$OPS" "authorization.run('issue', { profileId: profile.id }, issueHostKeyOptions)"
+require "$OPS" "const runIssueProfile = function(profile, deployAfterIssue)"
+require "$OPS" "const operation = deployAfterIssue ? 'issue-deploy' : 'issue';"
+require "$OPS" "authorization.run(operation, { profileId: profile.id }, issueHostKeyOptions)"
+require "$OPS" "return runIssueProfile(profile, false);"
+require "$OPS" "return runIssueProfile(profile, true);"
+require "$OPS" "}, _('Issue'))"
+require "$OPS" "}, _('Issue and deploy'))"
 require "$OPS" "return { profileId: profile.id, allowKeyConvert: !!options.allowKeyConvert };"
 require "$CERTS" "payload: { profileId: profile.id }"
 
@@ -19,5 +25,10 @@ for forbidden in 'credentials:' 'keyPem:' 'fullchainPem:' 'domain:' 'ca:' 'accou
 	printf '%s\n' "$deploy_block" | grep -Fq -- "$forbidden" && { echo "deploy payload contains snapshot field: $forbidden"; exit 1; } || :
 	printf '%s\n' "$cert_block" | grep -Fq -- "$forbidden" && { echo "certificate deploy payload contains snapshot field: $forbidden"; exit 1; } || :
 done
+
+if printf '%s\n' "$issue_block" | grep -Fq -- 'runDeployProfile('; then
+	echo "combined issue flow must not trigger a second deploy authorization"
+	exit 1
+fi
 
 echo "test_profile_execution_ui_contract: ok"

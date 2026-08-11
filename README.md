@@ -41,7 +41,7 @@ The browser submits an operation intent, while the router backend reloads the sa
 
 Real issuance, renewal, deployment, core installation or upgrade, temporary SSH key conversion and sensitive configuration export require explicit authorization. Revocation, certificate removal, profile deletion and overwrite imports always require a one-time decision.
 
-When an issue profile links a deploy profile, the initial certificate issue and the subsequent deployment remain separate authorized operations. The installed `acmesh-console-ssh` hook is used by later `acme.sh` renewals and never bypasses deploy authorization.
+The issue profile table exposes two explicit choices: **Issue** authorizes certificate issuance only, while **Issue and deploy** creates one combined authorization and one task whose risk summary covers both issuance and the linked deployment. The installed `acmesh-console-ssh` hook is used by later `acme.sh` renewals and never bypasses deploy authorization.
 
 There is no global test mode, debug bypass, `--yes`, `--force-all` or disable-confirmations switch. Test mode performs command validation without ACME requests, DNS changes, file deployment, service reloads or remembered authorization. Let's Encrypt Staging remains a real remote ACME service and is not treated as test mode.
 
@@ -214,12 +214,12 @@ LuCI → 服务 → acme.sh Console
 4. 如果使用 DNS 验证，配置对应的官方 DNS API 凭据；
 5. 可选：创建本机或 SSH 部署配置；
 6. 先运行测试操作检查最终命令和参数；
-7. 核对风险摘要后执行真实签发或部署；
+7. 核对风险摘要后选择 **签发**，或选择 **签发并部署**（后者只确认一次，授权摘要同时覆盖签发和关联部署）；
 8. 在任务页面查看阶段、结果和脱敏日志。
 
 如果签发配置关联了部署配置，控制台会在对应的 `acmeHome/deploy/` 中自动注册
 `acmesh-console-ssh` hook（同时保留 `acmesh_console_ssh` 兼容入口），因此不需要手动复制 hook 文件。
-首次签发完成后，控制台会按独立的部署授权启动 deploy 任务；后续 `acme.sh` 续期才由该 hook 触发部署，且始终要求匹配的部署授权。
+操作页中的 **签发** 只执行证书签发；**签发并部署** 会在一次风险授权下顺序完成签发和关联部署，不会在签发成功后再次弹出部署授权。后续 `acme.sh` 续期才由该 hook 触发部署，且始终要求匹配的部署授权。
 
 ### 测试模式与 Let's Encrypt Staging
 

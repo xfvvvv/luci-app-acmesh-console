@@ -111,8 +111,11 @@ msgstr "対象"
 msgid "Reload command"
 msgstr "再読み込みコマンド"
 
-msgid "Run"
-msgstr "実行"
+msgid "Issue"
+msgstr "発行"
+
+msgid "Issue and deploy"
+msgstr "発行してデプロイ"
 
 msgid "DNS Test"
 msgstr "DNS テスト"

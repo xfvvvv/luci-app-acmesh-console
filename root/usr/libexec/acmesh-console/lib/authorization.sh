@@ -171,6 +171,7 @@ acmesh_auth_snapshot() (
 		acmesh_canon_string subjectId "$subject_id" || exit $?
 		case "$operation" in
 			issue|renew) acmesh_auth_emit_issue || exit $? ;;
+			issue-deploy) acmesh_auth_emit_issue || exit $?; acmesh_auth_emit_deploy || exit $? ;;
 			deploy|deploy-run) acmesh_auth_emit_deploy || exit $? ;;
 			core-install|core-upgrade) acmesh_auth_emit_core || exit $? ;;
 			import|import-apply) acmesh_canon_string configDigest "${ACMESH_AUTH_CONFIG_DIGEST-}" && acmesh_canon_string overwriteMode "${ACMESH_AUTH_OVERWRITE_MODE-}" || exit $? ;;
@@ -265,7 +266,7 @@ acmesh_auth_snapshot_identity_matches() {
 }
 acmesh_auth_operation_supported() {
 	case "$1" in
-		issue|renew|deploy|deploy-run|core-install|core-upgrade|import|import-apply|export|secret-export|ssh-key-convert|certificate-revoke|certificate-remove|profile-delete|authorization-revoke) return 0 ;;
+		issue|issue-deploy|renew|deploy|deploy-run|core-install|core-upgrade|import|import-apply|export|secret-export|ssh-key-convert|certificate-revoke|certificate-remove|profile-delete|authorization-revoke) return 0 ;;
 		*) return 1 ;;
 	esac
 }

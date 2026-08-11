@@ -1071,7 +1071,7 @@ return view.extend({
 			]);
 		}.bind(this);
 
-		const runIssueProfile = function(profile) {
+		const runIssueProfile = function(profile, deployAfterIssue) {
 			const resolved = resolveIssueProfile(profile);
 			const account = resolved.account;
 			const deploy = resolved.deploy;
@@ -1089,32 +1089,36 @@ return view.extend({
 				ui.addNotification(null, E('p', {}, message), 'danger');
 				return Promise.resolve();
 			}
+			if (deployAfterIssue) {
+				if (!deploy) {
+					const message = _('No deploy profile');
+					output.textContent = message;
+					ui.addNotification(null, E('p', {}, message), 'danger');
+					return Promise.resolve();
+				}
+				const deployPreview = Object.assign({}, deploy);
+				if ((deployPreview.certSource || 'managed-acme') === 'managed-acme' && !deployPreview.domain)
+					deployPreview.domain = profile.domain;
+				deployPreview.keyType = profile.keyType || deployPreview.keyType || 'ec256';
+				const deployError = validateDeployProfile(deployPreview);
+				if (deployError) {
+					output.textContent = deployError;
+					ui.addNotification(null, E('p', {}, deployError), 'danger');
+					return Promise.resolve();
+				}
+			}
 			output.textContent = _('Creating task') + '...';
-			const issueHostKeyOptions = deploy && (deploy.type || 'local') === 'ssh' ? {
+			const issueHostKeyOptions = deployAfterIssue && deploy && (deploy.type || 'local') === 'ssh' ? {
 				host: deploy.host || '',
 				port: deploy.port || 22
 			} : {};
-			return authorization.run('issue', { profileId: profile.id }, issueHostKeyOptions).then(function(res) {
+			const operation = deployAfterIssue ? 'issue-deploy' : 'issue';
+			return authorization.run(operation, { profileId: profile.id }, issueHostKeyOptions).then(function(res) {
 				if (!res.taskId) {
 					output.textContent = res.error || _('Unable to create task');
 					return null;
 				}
 				return waitTask(res.taskId);
-			}).then(function(status) {
-				if (!status || status.status !== 'success' || !deploy)
-					return status;
-				const linkedDeploy = Object.assign({}, deploy);
-				if ((linkedDeploy.certSource || 'managed-acme') === 'managed-acme' && !linkedDeploy.domain)
-					linkedDeploy.domain = profile.domain;
-				linkedDeploy.keyType = profile.keyType || linkedDeploy.keyType || 'ec256';
-				const deployError = validateDeployProfile(linkedDeploy);
-				if (deployError) {
-					output.textContent = output.textContent + '\n\n' + deployError;
-					ui.addNotification(null, E('p', {}, deployError), 'danger');
-					return status;
-				}
-				output.textContent = output.textContent + '\n\n' + _('Issue succeeded; starting deploy profile') + ': ' + (deploy.name || deploy.id);
-				return runDeployProfile(linkedDeploy, testMode ? 'deploy-test' : 'deploy-run');
 			});
 		};
 
@@ -1203,8 +1207,11 @@ return view.extend({
 					E('span', { 'class': dnsError ? 'acmesh-warning' : 'acmesh-ok' }, dnsError || testModePolicyLabel(profile)),
 					E('div', { 'class': 'acmesh-row-actions' }, [
 						E('button', { 'class': 'btn cbi-button cbi-button-apply', 'click': ui.createHandlerFn(this, function() {
-							return runIssueProfile(profile);
-						}) }, _('Run')),
+							return runIssueProfile(profile, false);
+						}) }, _('Issue')),
+						E('button', { 'class': 'btn cbi-button cbi-button-apply', 'click': ui.createHandlerFn(this, function() {
+							return runIssueProfile(profile, true);
+						}) }, _('Issue and deploy')),
 						E('button', { 'class': 'btn cbi-button cbi-button-neutral', 'click': ui.createHandlerFn(this, function() {
 							return runDnsTestProfile(profile);
 						}) }, _('DNS Test')),
