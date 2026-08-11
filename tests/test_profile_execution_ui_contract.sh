@@ -7,7 +7,7 @@ CERTS="$ROOT/htdocs/luci-static/resources/view/acmesh/certificates_v2.js"
 
 require() { grep -Fq -- "$2" "$1" || { echo "missing execution contract: $2"; exit 1; }; }
 
-require "$OPS" "authorization.run('issue', { profileId: profile.id })"
+require "$OPS" "authorization.run('issue', { profileId: profile.id }, issueHostKeyOptions)"
 require "$OPS" "return { profileId: profile.id, allowKeyConvert: !!options.allowKeyConvert };"
 require "$CERTS" "payload: { profileId: profile.id }"
 

@@ -1090,7 +1090,11 @@ return view.extend({
 				return Promise.resolve();
 			}
 			output.textContent = _('Creating task') + '...';
-			return authorization.run('issue', { profileId: profile.id }).then(function(res) {
+			const issueHostKeyOptions = deploy && (deploy.type || 'local') === 'ssh' ? {
+				host: deploy.host || '',
+				port: deploy.port || 22
+			} : {};
+			return authorization.run('issue', { profileId: profile.id }, issueHostKeyOptions).then(function(res) {
 				if (!res.taskId) {
 					output.textContent = res.error || _('Unable to create task');
 					return null;

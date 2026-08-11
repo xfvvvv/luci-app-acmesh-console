@@ -82,7 +82,11 @@ function run(method, payload, options) {
 			return showHostKey(response, options);
 		if (response && (response.hostKeyRequired || response.error === 'hostKeyRequired')) {
 			const challenge = response.challengeId ? Promise.resolve(response) : acmeshApi.write('ssh_hostkey_probe', { host: options && options.host, port: options && options.port || 22 });
-			return challenge.then(function(probed) { return showHostKey(probed, options); }).then(function(confirmed) {
+			return challenge.then(function(probed) {
+				if (!probed || probed.ok || (!probed.challengeId && probed.error !== 'hostKeyChanged'))
+					return probed || { ok: false, error: 'hostKeyProbeFailed' };
+				return showHostKey(probed, options);
+			}).then(function(confirmed) {
 				return confirmed && confirmed.ok ? run(method, payload, options) : confirmed;
 			});
 		}

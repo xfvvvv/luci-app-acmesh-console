@@ -18,6 +18,8 @@ require "$AUTH" "'once'"
 require "$AUTH" "'remember'"
 require "$AUTH" 'response.riskSummary'
 require "$AUTH" "response.error === 'hostKeyChanged'"
+require "$AUTH" "probed.ok || (!probed.challengeId"
+require "$AUTH" "!probed.challengeId"
 require "$AUTH" 'new Promise(function(resolve, reject)'
 require "$AUTH" '.then(resolve, reject)'
 require "$AUTH" 'showChallenge(next, options).then(resolve, reject)'
@@ -33,6 +35,8 @@ for label in Operation Subject Scope Granted 'Last used' Uses Status Actions; do
 require "$OPS" "'authorization_revoke'"
 require "$OPS" "'authorization_revoke_all'"
 require "$OPS" "authorization.run('profile_delete'"
+require "$OPS" 'const issueHostKeyOptions = deploy && (deploy.type || '\''local'\'') === '\''ssh'\'''
+require "$OPS" "authorization.run('issue', { profileId: profile.id }, issueHostKeyOptions)"
 for key in domains challengeAlias dnsSleep ec256 ec384 ec521 rsa2048 rsa3072 rsa4096 rsa8192; do require "$OPS" "$key"; done
 require "$CERTS" "authorization.run('renew'"
 require "$CERTS" "'certificate_revoke'"
