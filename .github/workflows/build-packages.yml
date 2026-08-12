@@ -34,7 +34,6 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.package.outputs.version }}
-      release: ${{ steps.package.outputs.release }}
     steps:
       - name: Check out source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -47,15 +46,12 @@ jobs:
         run: |
           set -euo pipefail
           version="$(sed -n 's/^PKG_VERSION:=//p' Makefile | head -n 1)"
-          release="$(sed -n 's/^PKG_RELEASE:=//p' Makefile | head -n 1)"
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([._+-][0-9A-Za-z._+-]+)?$ ]]
-          [[ "$release" =~ ^[0-9]+$ ]]
           if [[ "$REF_TYPE" == tag && "$REF_NAME" != "v$version" ]]; then
             echo "Tag $REF_NAME must match Makefile PKG_VERSION v$version" >&2
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "release=$release" >> "$GITHUB_OUTPUT"
 
   build:
     name: ${{ matrix.target.format }} / ${{ matrix.arch }}
@@ -114,7 +110,6 @@ jobs:
           FORMAT: ${{ matrix.target.format }}
           SDK: ${{ matrix.target.sdk }}
           VERSION: ${{ needs.metadata.outputs.version }}
-          RELEASE: ${{ needs.metadata.outputs.release }}
         run: |
           set -euo pipefail
           mkdir -p dist bundle
@@ -144,7 +139,7 @@ jobs:
             cp "$package" "dist/${stem}_${SDK}_${ARCH}.${FORMAT}"
           done
 
-          archive="dist/luci-app-acmesh-console_${VERSION}-${RELEASE}_${SDK}_${ARCH}.tar.gz"
+          archive="dist/luci-app-acmesh-console_${VERSION}_${SDK}_${ARCH}.tar.gz"
           tar -C bundle -czf "$archive" "${FORMAT}-${ARCH}"
           (
             cd dist
