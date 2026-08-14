@@ -47,6 +47,8 @@ There is no global test mode, debug bypass, `--yes`, `--force-all` or disable-co
 
 Private state is stored under `/etc/acmesh-console` using `0700` directories and `0600` private files. Remembered authorization and pinned SSH identities stay local to the router and are deliberately excluded from configuration migration.
 
+The package registers `/etc/acme` with OpenWrt's sysupgrade keep list, so `sysupgrade -b` preserves the official `acme.sh` account keys, certificate keys, issued certificates and domain configuration. Backup archives therefore contain sensitive credentials and must be stored securely. `/etc/ssl` is not managed by this package and is not included automatically.
+
 ### Compatibility and installation
 
 | Target | Format | Package manager |
@@ -155,6 +157,8 @@ OpenWrt 24.10 向けに IPK、OpenWrt SNAPSHOT と ImmortalWrt 25.12.1 向けに
 ```
 
 目录权限为 `0700`，私密文件为 `0600`。DNS 凭据、密码、PEM、私钥、任务私有文件和迁移导出内容不会写入公开日志。
+
+本包会将 `/etc/acme` 注册到 OpenWrt 的 sysupgrade 保留清单，因此执行 `sysupgrade -b` 时会保存官方 `acme.sh` 的账户密钥、证书私钥、已签发证书和域名配置。备份包包含敏感凭据，必须安全保存。`/etc/ssl` 不属于本包管理范围，不会自动加入备份。
 
 ### 没有全局绕过开关
 
@@ -276,7 +280,7 @@ printf '%s\n' '{"profileId":"example"}' | \
 - OpenWrt 24.10 IPK；
 - OpenWrt SNAPSHOT APK。
 
-在 Actions 中手动运行 **Build release packages** 可以下载构建产物。项目版本仅由 `PKG_VERSION` 表示；每次代码发布都递增 `PKG_VERSION`，并推送完全匹配的标签，例如 `PKG_VERSION:=0.1.4` 对应 `v0.1.4`；该标签会自动创建或更新 GitHub Release，并附加所有包和 SHA-256 校验文件。
+在 Actions 中手动运行 **Build release packages** 可以下载构建产物。项目版本仅由 `PKG_VERSION` 表示；每次代码发布都递增 `PKG_VERSION`，并推送完全匹配的标签，例如 `PKG_VERSION:=0.1.5` 对应 `v0.1.5`；该标签会自动创建或更新 GitHub Release，并附加所有包和 SHA-256 校验文件。
 
 Windows + WSL2、ImmortalWrt SDK、完整源码、ImageBuilder、x86-64/ext4 镜像和路由器验收流程参见：
 

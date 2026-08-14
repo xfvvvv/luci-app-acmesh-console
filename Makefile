@@ -4,7 +4,7 @@ LUCI_TITLE:=acme.sh Console
 LUCI_DEPENDS:=+luci-base +rpcd +rpcd-mod-file +busybox +jsonfilter +openssl-util +ca-bundle +curl +tar +dropbearconvert +openssh-client-utils
 
 PKG_NAME:=luci-app-acmesh-console
-PKG_VERSION:=0.1.4
+PKG_VERSION:=0.1.5
 PKG_LICENSE:=Apache-2.0
 PKG_LICENSE_FILES:=LICENSE
 

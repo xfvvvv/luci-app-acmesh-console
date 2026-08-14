@@ -6,6 +6,7 @@ MAKEFILE="$ROOT/Makefile"
 CLEANUP="$ROOT/root/etc/uci-defaults/99-acmesh-console-cleanup"
 API_MODULE="$ROOT/htdocs/luci-static/resources/acmesh/api_v2.js"
 AUTHORIZATION_MODULE="$ROOT/htdocs/luci-static/resources/acmesh/authorization_v2.js"
+KEEPD="$ROOT/root/lib/upgrade/keep.d/luci-app-acmesh-console"
 
 require() { grep -F "$2" "$1" >/dev/null || { echo "missing package contract: $2"; exit 1; }; }
 
@@ -43,6 +44,9 @@ require "$AUTHORIZATION_MODULE" 'return baseclass.extend({'
 [ ! -f "$ROOT/htdocs/luci-static/resources/acmesh/authorization.js" ]
 [ -f "$ROOT/README.md" ] || { echo 'README.md missing'; exit 1; }
 [ -f "$ROOT/LICENSE" ] || { echo 'LICENSE missing'; exit 1; }
+[ -f "$KEEPD" ] || { echo 'sysupgrade keep.d entry missing'; exit 1; }
+grep -Fx '/etc/acme' "$KEEPD" >/dev/null || { echo 'sysupgrade keep.d entry must preserve /etc/acme'; exit 1; }
+if grep -Fx '/etc/ssl' "$KEEPD" >/dev/null; then echo 'sysupgrade keep.d entry must not claim /etc/ssl'; exit 1; fi
 grep -F 'Apache License' "$ROOT/LICENSE" >/dev/null || { echo 'Apache license text missing'; exit 1; }
 grep -F 'Version 2.0' "$ROOT/LICENSE" >/dev/null || { echo 'Apache license version missing'; exit 1; }
 
