@@ -1200,7 +1200,7 @@ Router-side verification commands
 Security reporting and license
 ```
 
-State that user authorization accepts business consequences but never disables plugin security guarantees. Add standard GPL-3.0 text matching `PKG_LICENSE`.
+State that user authorization accepts business consequences but never disables plugin security guarantees. Add the standard Apache-2.0 text matching `PKG_LICENSE`.
 
 - [ ] **Step 5: Run complete local verification**
 

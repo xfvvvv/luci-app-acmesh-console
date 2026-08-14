@@ -24,6 +24,8 @@ done
 require "$MAKEFILE" '+jsonfilter'
 require "$MAKEFILE" '+dropbearconvert'
 require "$MAKEFILE" 'define Build/Prepare/luci-app-acmesh-console'
+require "$MAKEFILE" 'PKG_LICENSE:=Apache-2.0'
+require "$MAKEFILE" 'PKG_LICENSE_FILES:=LICENSE'
 require "$MAKEFILE" 'find $(PKG_BUILD_DIR) -type f -exec chmod 0644 {} +'
 require "$MAKEFILE" '$(PKG_BUILD_DIR)/root/usr/libexec/acmesh-console/acmeshctl'
 require "$CLEANUP" '/www/luci-static/resources/view/acmesh/operations.js'
@@ -41,5 +43,7 @@ require "$AUTHORIZATION_MODULE" 'return baseclass.extend({'
 [ ! -f "$ROOT/htdocs/luci-static/resources/acmesh/authorization.js" ]
 [ -f "$ROOT/README.md" ] || { echo 'README.md missing'; exit 1; }
 [ -f "$ROOT/LICENSE" ] || { echo 'LICENSE missing'; exit 1; }
+grep -F 'Apache License' "$ROOT/LICENSE" >/dev/null || { echo 'Apache license text missing'; exit 1; }
+grep -F 'Version 2.0' "$ROOT/LICENSE" >/dev/null || { echo 'Apache license version missing'; exit 1; }
 
 echo 'test_package_contract: ok'
