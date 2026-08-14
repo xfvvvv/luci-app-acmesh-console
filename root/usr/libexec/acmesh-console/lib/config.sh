@@ -160,77 +160,38 @@ acmesh_config_save_file_locked() (
 
 acmesh_config_save_file() ( acmesh_lock_run "$ACMESH_CONFIG_LOCK_FILE" acmesh_config_save_file_locked "$1"; )
 
-acmesh_config_validate_import_envelope() (
-	set +u
-	path="$1"; acmesh_profile_jshn || return 1; json_load_file "$path" || return 2
-	json_get_keys keys; acmesh_profile_allowed_keys 'format version exportedAt warning config' $keys || return 2
-	json_get_type type format 2>/dev/null; [ "$type" = string ] || return 2; json_get_var format format; [ "$format" = acmesh-console-config ] || return 2
-	json_get_type type version 2>/dev/null; [ "$type" = int ] || return 2; json_get_var version version; [ "$version" = 1 ] || return 2
-	for optional in exportedAt warning; do json_get_type type "$optional" 2>/dev/null || type=; case "$type" in ''|string) ;; *) return 2;; esac; done
-	json_get_type type config 2>/dev/null; [ "$type" = object ] || return 2
-)
-
-acmesh_config_import_materialize() {
-	request_file="$1" envelope="$2" candidate="$3"
-	[ "$(jsonfilter -i "$request_file" -t '@.payload' 2>/dev/null || true)" = string ] || return 2
-	jsonfilter -i "$request_file" -e '@.payload' > "$envelope" || return 2
-	chmod 600 "$envelope" || return 1
-	acmesh_config_validate_import_envelope "$envelope" || return 2
-	jsonfilter -i "$envelope" -e '@.config' | acmesh_atomic_write "$candidate" 600 || return 1
-	[ "$(jsonfilter -i "$candidate" -t '@.schemaVersion' 2>/dev/null || true)" = int ] && [ "$(jsonfilter -i "$candidate" -e '@.schemaVersion' 2>/dev/null || true)" = 2 ] || return 2
-	acmesh_config_validate_file "$candidate"
+acmesh_config_import_preview() {
+	request_file="$1"
+	[ "$(jsonfilter -i "$request_file" -t '@.archiveBase64' 2>/dev/null || true)" = string ] || {
+		printf '{"ok":false,"error":"migration archive required"}\n'
+		return 2
+	}
+	acmesh_migration_import_preview "$request_file"
 }
-
-acmesh_config_import_preview() (
-	set +u
-	request_file="$1"; acmesh_private_dir "$ACMESH_PENDING_IMPORT_DIR" || return 1
-	tmp="$ACMESH_PENDING_IMPORT_DIR/.preview.$$.$(date +%s)"; envelope="$tmp.envelope" candidate="$tmp.config"
-	trap 'rm -f "$envelope" "$candidate"' HUP INT TERM EXIT
-	rc=0; acmesh_config_import_materialize "$request_file" "$envelope" "$candidate" || rc=$?
-	[ "$rc" = 0 ] || { rm -f "$envelope" "$candidate"; trap - HUP INT TERM EXIT; printf '{"ok":false,"error":"invalid import envelope"}\n'; return "$rc"; }
-	digest="$(sha256sum "$envelope" | awk '{print $1}')"; pending="$ACMESH_PENDING_IMPORT_DIR/$digest.json"
-	mv -f "$envelope" "$pending" && chmod 600 "$pending" || return 1
-	accounts="$(jsonfilter -i "$candidate" -e '@.accountProfiles[*]' 2>/dev/null | wc -l | tr -d ' ')"
-	issues="$(jsonfilter -i "$candidate" -e '@.issueProfiles[*]' 2>/dev/null | wc -l | tr -d ' ')"
-	deploys="$(jsonfilter -i "$candidate" -e '@.deployProfiles[*]' 2>/dev/null | wc -l | tr -d ' ')"
-	rm -f "$candidate"; trap - HUP INT TERM EXIT
-	printf '{"ok":true,"previewId":"%s","configDigest":"%s","summary":{"accounts":%s,"issueProfiles":%s,"deployProfiles":%s}}\n' "$digest" "$digest" "$accounts" "$issues" "$deploys"
-)
 
 acmesh_config_pending_candidate() {
 	digest="$1" output="$2"; [ "${#digest}" = 64 ] || return 2; case "$digest" in *[!0-9a-f]*) return 2;; esac
-	pending="$ACMESH_PENDING_IMPORT_DIR/$digest.json"
-	[ -f "$pending" ] && [ ! -L "$pending" ] && acmesh_private_file_is_secure "$pending" || return 1
-	[ "$(sha256sum "$pending" | awk '{print $1}')" = "$digest" ] || return 1
-	acmesh_config_validate_import_envelope "$pending" || return 1
-	jsonfilter -i "$pending" -e '@.config' | acmesh_atomic_write "$output" 600 || return 1
-	[ "$(jsonfilter -i "$output" -t '@.schemaVersion' 2>/dev/null || true)" = int ] && [ "$(jsonfilter -i "$output" -e '@.schemaVersion' 2>/dev/null || true)" = 2 ] || return 1
-	acmesh_config_validate_file "$output"
+	if [ -f "$ACMESH_PENDING_IMPORT_DIR/$digest.tar.gz" ]; then
+		pending="$ACMESH_PENDING_IMPORT_DIR/$digest.tar.gz"
+		[ ! -L "$pending" ] && acmesh_private_file_is_secure "$pending" || return 1
+		[ "$(sha256sum "$pending" | awk '{print $1}')" = "$digest" ] || return 1
+		acmesh_migration_archive_candidate "$pending" "$output"
+		return $?
+	fi
+	return 1
 }
 
 acmesh_config_apply_pending_locked() (
 	digest="$1"; tmp="$ACMESH_PENDING_IMPORT_DIR/.apply.$$.config"
 	trap 'rm -f "$tmp"' HUP INT TERM EXIT
-	acmesh_config_pending_candidate "$digest" "$tmp" || return 1
-	cat "$tmp" | acmesh_atomic_write "$(acmesh_config_path)" 600 || return 1
-	rm -f "$ACMESH_PENDING_IMPORT_DIR/$digest.json" "$tmp"; trap - HUP INT TERM EXIT
+	if [ -f "$ACMESH_PENDING_IMPORT_DIR/$digest.tar.gz" ]; then
+		acmesh_migration_install_archive "$ACMESH_PENDING_IMPORT_DIR/$digest.tar.gz" || return 1
+		return 0
+	fi
+	return 1
 )
 
 acmesh_config_apply_pending() ( acmesh_lock_run "$ACMESH_CONFIG_LOCK_FILE" acmesh_config_apply_pending_locked "$1"; )
-
-acmesh_config_secret_export() {
-	path="$(acmesh_config_path)"; [ -f "$path" ] && [ ! -L "$path" ] && acmesh_config_validate_file "$path" || return 1
-	printf '{"ok":true,"format":"acmesh-console-config","version":1,"config":'
-	cat "$path"
-	printf '}\n'
-}
-
-acmesh_config_secret_export_expected_locked() (
-	expected="$1" path="$(acmesh_config_path)"; [ "$(sha256sum "$path" | awk '{print $1}')" = "$expected" ] || return 5
-	acmesh_config_secret_export
-)
-
-acmesh_config_secret_export_expected() ( acmesh_lock_run "$ACMESH_CONFIG_LOCK_FILE" acmesh_config_secret_export_expected_locked "$1"; )
 
 acmesh_config_profile_dependencies() (
 	set +u

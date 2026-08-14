@@ -1092,6 +1092,45 @@ msgstr "구성을 가져왔습니다"
 msgid "Overwrite current configuration"
 msgstr "현재 구성 덮어쓰기"
 
+msgid "Download a .tar.gz migration archive containing ACME state and console configuration."
+msgstr "ACME 상태와 콘솔 설정이 포함된 .tar.gz 마이그레이션 아카이브를 다운로드합니다."
+
+msgid "The archive contains sensitive ACME account data and console credentials. Deployment certificates are included only when selected."
+msgstr "아카이브에는 민감한 ACME 계정 데이터와 콘솔 자격 증명이 포함됩니다. 선택한 경우에만 배포 인증서를 포함합니다."
+
+msgid "Include deployment certificates"
+msgstr "배포 인증서 포함"
+
+msgid "Exported archive"
+msgstr "아카이브 내보냄"
+
+msgid "Archive selected. Preview it before applying."
+msgstr "아카이브를 선택했습니다. 적용하기 전에 미리 보세요."
+
+msgid "Unable to read selected archive"
+msgstr "선택한 아카이브를 읽을 수 없습니다"
+
+msgid "Migration archive exceeds the 16 MiB limit"
+msgstr "마이그레이션 아카이브가 16 MiB 제한을 초과했습니다"
+
+msgid "Select a .tar.gz migration archive first"
+msgstr "먼저 .tar.gz 마이그레이션 아카이브를 선택하세요"
+
+msgid "Archive preview failed"
+msgstr "아카이브 미리 보기에 실패했습니다"
+
+msgid "Imported archive summary"
+msgstr "가져온 아카이브 요약"
+
+msgid "Preview the archive before applying"
+msgstr "적용하기 전에 아카이브를 미리 보세요"
+
+msgid "Migration archive imported"
+msgstr "마이그레이션 아카이브를 가져왔습니다"
+
+msgid "Restore migration archive"
+msgstr "마이그레이션 아카이브 복원"
+
 msgid "The SSH private key is in OpenSSH format, but this router is using Dropbear. Convert it temporarily and retry the deployment."
 msgstr "SSH 개인 키는 OpenSSH 형식이지만 이 라우터는 Dropbear를 사용합니다. 임시로 변환한 후 배포를 다시 시도하십시오."
 

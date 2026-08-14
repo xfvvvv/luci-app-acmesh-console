@@ -11,6 +11,7 @@ KEEPD="$ROOT/root/lib/upgrade/keep.d/luci-app-acmesh-console"
 require() { grep -F "$2" "$1" >/dev/null || { echo "missing package contract: $2"; exit 1; }; }
 
 require "$MAKEFILE" 'define Package/luci-app-acmesh-console/conffiles'
+[ -f "$ROOT/root/usr/libexec/acmesh-console/lib/migration.sh" ] || { echo 'migration library missing'; exit 1; }
 for path in \
 	/etc/config/acmesh-console \
 	/etc/acmesh-console/config.json \
@@ -23,6 +24,7 @@ do
 	require "$MAKEFILE" "$path"
 done
 require "$MAKEFILE" '+jsonfilter'
+require "$MAKEFILE" '+tar'
 require "$MAKEFILE" '+dropbearconvert'
 require "$MAKEFILE" 'define Build/Prepare/luci-app-acmesh-console'
 require "$MAKEFILE" 'PKG_LICENSE:=Apache-2.0'

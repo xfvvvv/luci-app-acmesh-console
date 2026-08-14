@@ -45,9 +45,9 @@ The issue profile table exposes two explicit choices: **Issue** authorizes certi
 
 There is no global test mode, debug bypass, `--yes`, `--force-all` or disable-confirmations switch. Test mode performs command validation without ACME requests, DNS changes, file deployment, service reloads or remembered authorization. Let's Encrypt Staging remains a real remote ACME service and is not treated as test mode.
 
-Private state is stored under `/etc/acmesh-console` using `0700` directories and `0600` private files. Remembered authorization and pinned SSH identities stay local to the router and are deliberately excluded from configuration migration.
+Private state is stored under `/etc/acmesh-console` using `0700` directories and `0600` private files. Remembered authorization, the router instance identifier, and pinned SSH host identities stay local to the router and are deliberately excluded from migration archives.
 
-The package registers `/etc/acme` with OpenWrt's sysupgrade keep list, so `sysupgrade -b` preserves the official `acme.sh` account keys, certificate keys, issued certificates and domain configuration. Backup archives therefore contain sensitive credentials and must be stored securely. `/etc/ssl` is not managed by this package and is not included automatically.
+Configuration migration downloads a `.tar.gz` archive containing `/etc/acme`, the console configuration under `/etc/acmesh-console`, and `/etc/config/acmesh-console`. The export dialog can additionally include the local certificate and key files actually referenced by deploy profiles; it never packages the whole `/etc/ssl` directory or remote SSH targets. These archives contain sensitive credentials and must be stored securely. The package also registers `/etc/acme` with OpenWrt's sysupgrade keep list; `/etc/ssl` is not added to that automatic list.
 
 ### Compatibility and installation
 
@@ -158,7 +158,7 @@ OpenWrt 24.10 向けに IPK、OpenWrt SNAPSHOT と ImmortalWrt 25.12.1 向けに
 
 目录权限为 `0700`，私密文件为 `0600`。DNS 凭据、密码、PEM、私钥、任务私有文件和迁移导出内容不会写入公开日志。
 
-本包会将 `/etc/acme` 注册到 OpenWrt 的 sysupgrade 保留清单，因此执行 `sysupgrade -b` 时会保存官方 `acme.sh` 的账户密钥、证书私钥、已签发证书和域名配置。备份包包含敏感凭据，必须安全保存。`/etc/ssl` 不属于本包管理范围，不会自动加入备份。
+配置迁移会下载 `.tar.gz` 归档，包含 `/etc/acme`、`/etc/acmesh-console` 中的控制台配置以及 `/etc/config/acmesh-console`。导出界面可以额外选择收集部署配置实际引用的本地证书和私钥文件；不会打包整个 `/etc/ssl`，也不会读取 SSH 远端目标。归档包含敏感凭据，必须安全保存。本包仍会将 `/etc/acme` 注册到 OpenWrt 的 sysupgrade 保留清单；`/etc/ssl` 不会加入自动保留清单。
 
 ### 没有全局绕过开关
 

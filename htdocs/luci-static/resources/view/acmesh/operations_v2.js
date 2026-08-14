@@ -351,56 +351,6 @@ function mergeConfig(config) {
 	return config;
 }
 
-function buildMigrationEnvelope(config) {
-	return {
-		format: 'acmesh-console-config',
-		version: 1,
-		exportedAt: new Date().toISOString(),
-		warning: 'This export contains sensitive DNS credentials and certificate material.',
-		config: mergeConfig(config)
-	};
-}
-
-function migrationSummary(config) {
-	config = mergeConfig(config);
-	return [
-		_('Accounts') + ': ' + config.accountProfiles.length,
-		_('Issue profiles') + ': ' + config.issueProfiles.length,
-		_('Deploy profiles') + ': ' + config.deployProfiles.length,
-		_('Default account email') + ': ' + (config.global.defaultAccountEmail || '-'),
-		_('ACME home') + ': ' + (config.global.acmeHome || '-'),
-		_('Core tag') + ': ' + (config.global.coreTag || '-')
-	].join('\n');
-}
-
-function parseMigrationConfig(text) {
-	let parsed;
-	try {
-		parsed = JSON.parse(text || '');
-	} catch (e) {
-		return { ok: false, error: _('Invalid JSON') };
-	}
-
-	const candidate = parsed && parsed.format === 'acmesh-console-config' ? parsed.config : parsed;
-	if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate))
-		return { ok: false, error: _('Configuration JSON must be an object') };
-	if (candidate.global && (typeof candidate.global !== 'object' || Array.isArray(candidate.global)))
-		return { ok: false, error: _('Configuration global section must be an object') };
-	if (candidate.accountProfiles && !Array.isArray(candidate.accountProfiles))
-		return { ok: false, error: _('Account profiles must be an array') };
-	if (candidate.issueProfiles && !Array.isArray(candidate.issueProfiles))
-		return { ok: false, error: _('Issue profiles must be an array') };
-	if (candidate.deployProfiles && !Array.isArray(candidate.deployProfiles))
-		return { ok: false, error: _('Deploy profiles must be an array') };
-
-	const config = mergeConfig(candidate);
-	return {
-		ok: true,
-		config: config,
-		summary: migrationSummary(config)
-	};
-}
-
 function id(prefix) {
 	return prefix + '-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 100000).toString(36);
 }
@@ -853,109 +803,137 @@ return view.extend({
 		};
 
 		const renderConfigMigration = function() {
-			const paste = E('textarea', {
-				'class': 'cbi-input-text acmesh-migration-json',
-				'placeholder': _('Paste configuration JSON'),
-				'rows': 8
-			});
 			const file = E('input', {
 				'class': 'cbi-input-file',
 				'type': 'file',
-				'accept': 'application/json,.json'
+				'accept': '.tar.gz,application/gzip,application/x-gzip'
 			});
+			const includeCertificates = E('input', { 'type': 'checkbox' });
 			const summary = E('pre', { 'class': 'acmesh-migration-summary' }, _('No import selected'));
-			let importedConfig = null;
+			let importedArchiveBase64 = null;
+			let importPreviewId = null;
 
-			const setImportText = function(text) {
-				paste.value = text || '';
-				const parsed = parseMigrationConfig(paste.value);
-				if (!parsed.ok) {
-					importedConfig = null;
-					summary.textContent = parsed.error;
-					summary.classList.remove('acmesh-ok');
-					summary.classList.add('acmesh-warning');
-					return;
-				}
-				importedConfig = parsed.config;
-				summary.textContent = _('Imported configuration summary') + '\n' + parsed.summary;
-				summary.classList.remove('acmesh-warning');
-				summary.classList.add('acmesh-ok');
+			const setSummary = function(text, ok) {
+				summary.textContent = text;
+				summary.classList.toggle('acmesh-ok', !!ok);
+				summary.classList.toggle('acmesh-warning', !ok);
+			};
+
+			const arrayBufferToBase64 = function(buffer) {
+				const bytes = new Uint8Array(buffer);
+				let binary = '';
+				for (let offset = 0; offset < bytes.length; offset += 0x8000)
+					binary += String.fromCharCode.apply(null, bytes.subarray(offset, Math.min(offset + 0x8000, bytes.length)));
+				return btoa(binary);
+			};
+
+			const base64ToBlob = function(encoded) {
+				const binary = atob(encoded);
+				const bytes = new Uint8Array(binary.length);
+				for (let index = 0; index < binary.length; index++)
+					bytes[index] = binary.charCodeAt(index);
+				return new Blob([ bytes ], { type: 'application/gzip' });
 			};
 
 			const exportConfig = function() {
-				return authorization.run('secret_export', { scope: 'config-with-secrets' }).then(function(envelope) {
-					if (!envelope || envelope.cancelled || !envelope.ok)
-						return envelope;
-					const blob = new Blob([ JSON.stringify(envelope, null, 2) + '\n' ], { type: 'application/json' });
+				const scope = includeCertificates.checked ? 'migration-archive-with-deployment-certs' : 'migration-archive';
+				return authorization.run('secret_export', { scope: scope }).then(function(archive) {
+					if (!archive || archive.cancelled || !archive.ok)
+						return archive;
+					const blob = base64ToBlob(archive.archiveBase64);
 					const url = URL.createObjectURL(blob);
 					const link = document.createElement('a');
 					link.href = url;
-					link.download = 'acmesh-console-config-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json';
+					link.download = archive.filename || 'acmesh-console-backup.tar.gz';
 					document.body.appendChild(link);
 					link.click();
 					link.remove();
 					URL.revokeObjectURL(url);
-					return envelope;
+					setSummary(_('Exported archive') + ': ' + archive.bytes + ' bytes', true);
+					return archive;
 				});
 			};
 
 			file.addEventListener('change', function() {
 				const selected = file.files && file.files[0];
-				if (!selected)
+				if (!selected) {
+					importedArchiveBase64 = null;
+					importPreviewId = null;
 					return;
+				}
+				if (selected.size > 16 * 1024 * 1024) {
+					importedArchiveBase64 = null;
+					importPreviewId = null;
+					setSummary(_('Migration archive exceeds the 16 MiB limit'), false);
+					file.value = '';
+					return;
+				}
 				const reader = new FileReader();
 				reader.onload = function() {
-					setImportText(String(reader.result || ''));
+					importedArchiveBase64 = arrayBufferToBase64(reader.result);
+					importPreviewId = null;
+					setSummary(_('Archive selected. Preview it before applying.'), true);
 				};
 				reader.onerror = function() {
-					importedConfig = null;
-					summary.textContent = _('Unable to read selected file');
-					summary.classList.remove('acmesh-ok');
-					summary.classList.add('acmesh-warning');
+					importedArchiveBase64 = null;
+					importPreviewId = null;
+					setSummary(_('Unable to read selected archive'), false);
 				};
-				reader.readAsText(selected);
+				reader.readAsArrayBuffer(selected);
 			});
+
+			const previewImport = function() {
+				if (!importedArchiveBase64) {
+					setSummary(_('Select a .tar.gz migration archive first'), false);
+					return Promise.resolve();
+				}
+				return authorization.run('import_preview', { archiveBase64: importedArchiveBase64 }).then(function(result) {
+					if (!result || !result.ok) {
+						setSummary((result && result.error) || _('Archive preview failed'), false);
+						return result;
+					}
+					importPreviewId = result.previewId;
+					setSummary(_('Imported archive summary') + '\n' + JSON.stringify(result.summary, null, 2), true);
+					return result;
+				});
+			};
+
+			const applyImport = function() {
+				const preview = importPreviewId ? Promise.resolve() : previewImport();
+				return preview.then(function(result) {
+					if (result && !result.ok)
+						return result;
+					if (!importPreviewId) {
+						setSummary(_('Preview the archive before applying'), false);
+						return;
+					}
+					return authorization.run('import_apply', { previewId: importPreviewId }).then(function(applied) {
+						if (applied && applied.ok) {
+							ui.addNotification(null, E('p', {}, _('Migration archive imported')), 'info');
+							importPreviewId = null;
+							return refresh();
+						}
+						return applied;
+					});
+				});
+			};
 
 			return E('div', { 'class': 'acmesh-section acmesh-migration' }, [
 				E('h3', {}, _('Configuration migration')),
-				E('p', { 'class': 'acmesh-warning' }, _('This export contains sensitive DNS credentials and certificate material.')),
+				E('p', { 'class': 'acmesh-warning' }, _('The archive contains sensitive ACME account data and console credentials. Deployment certificates are included only when selected.')),
 				E('div', { 'class': 'acmesh-migration-grid' }, [
 					E('div', { 'class': 'acmesh-card' }, [
 						E('h4', {}, _('Export configuration')),
-						E('p', {}, _('Download a full migration JSON for server changes, reinstallations, or version upgrades.')),
+						E('p', {}, _('Download a .tar.gz migration archive containing ACME state and console configuration.')),
+						E('label', { 'class': 'acmesh-checkbox' }, [ includeCertificates, _('Include deployment certificates') ]),
 						E('button', { 'class': 'btn cbi-button cbi-button-apply', 'click': ui.createHandlerFn(this, exportConfig) }, _('Export configuration'))
 					]),
 					E('div', { 'class': 'acmesh-card' }, [
 						E('h4', {}, _('Import configuration')),
 						field(_('Configuration file'), file),
-						field(_('Paste configuration JSON'), paste),
 						E('div', { 'class': 'acmesh-actions' }, [
-							E('button', { 'class': 'btn cbi-button cbi-button-neutral', 'click': ui.createHandlerFn(this, function() {
-								setImportText(paste.value);
-							}) }, _('Preview import')),
-							E('button', { 'class': 'btn cbi-button cbi-button-apply', 'click': ui.createHandlerFn(this, function() {
-								if (!importedConfig) {
-									const parsed = parseMigrationConfig(paste.value);
-									if (!parsed.ok) {
-										summary.textContent = parsed.error;
-										summary.classList.remove('acmesh-ok');
-										summary.classList.add('acmesh-warning');
-										ui.addNotification(null, E('p', {}, parsed.error), 'danger');
-										return Promise.resolve();
-									}
-									importedConfig = parsed.config;
-									summary.textContent = _('Imported configuration summary') + '\n' + parsed.summary;
-								}
-								config = mergeConfig(importedConfig);
-								return saveConfig().then(function(res) {
-									if (res && res.ok) {
-										ui.addNotification(null, E('p', {}, _('Configuration imported')), 'info');
-										editState = null;
-										return refresh();
-									}
-									return res;
-								});
-							}) }, _('Overwrite current configuration'))
+							E('button', { 'class': 'btn cbi-button cbi-button-neutral', 'click': ui.createHandlerFn(this, previewImport) }, _('Preview import')),
+							E('button', { 'class': 'btn cbi-button cbi-button-apply', 'click': ui.createHandlerFn(this, applyImport) }, _('Restore migration archive'))
 						]),
 						E('h4', {}, _('Imported configuration summary')),
 						summary

@@ -402,7 +402,7 @@ Every helper command performs its own authorization and input validation because
 
 ## Migration And Versioning
 
-Configuration export includes accounts, issue profiles, deploy profiles, defaults, and supported UI metadata. It excludes:
+Configuration migration exports a versioned `.tar.gz` archive rather than a JSON-only envelope. The archive includes the ACME home, console configuration files, and the UCI package configuration. An explicit export option adds only the local certificate/key files referenced by deploy profiles; it does not add the complete `/etc/ssl` tree or SSH remote targets. It excludes:
 
 - `authorizations.json`;
 - router instance identifier;
@@ -410,7 +410,7 @@ Configuration export includes accounts, issue profiles, deploy profiles, default
 - task history;
 - temporary or converted keys.
 
-The import envelope must be fully parsed and schema-validated before preview or execution. Preview is bound to a digest of the exact uploaded bytes. Import execution rejects a stale preview, unsupported version, malformed nested object, dangling reference, or changed upload.
+The migration archive must be fully listed and schema-validated before preview or execution. Archive paths are restricted to the supported roots, and absolute paths, traversal, symlinks, hard links, devices, and other special files are rejected. Preview is bound to a digest of the exact uploaded bytes. Import execution rejects a stale preview, unsupported version, malformed manifest, invalid configuration, or changed upload.
 
 `ackVersion`, ledger `schemaVersion`, and canonicalization version are explicit independent values. Unsupported versions fail closed instead of being guessed.
 
@@ -440,7 +440,7 @@ The import envelope must be fully parsed and schema-validated before preview or 
 
 1. Ledger mode is `0600` and parent directory mode is `0700`.
 2. Same-router package upgrade and sysupgrade preserve the ledger and instance identifier.
-3. Config export/import never transports authorization records.
+3. Config migration never transports authorization records or the router instance identifier.
 4. Moving configuration to another router requires fresh authorization.
 5. Corrupt or unsupported ledgers fail closed while status remains usable.
 

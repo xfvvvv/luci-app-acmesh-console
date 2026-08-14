@@ -4,7 +4,7 @@
 
 **Goal:** Add full configuration import and export for migrating acmesh-console between routers or plugin versions.
 
-**Architecture:** Use the existing JSON config as the source of truth. Add a frontend migration panel in `operations_v2.js` that exports an envelope containing metadata plus the raw config, and imports either that envelope or a raw config object by calling existing `config-save`.
+**Architecture:** Use the existing JSON config as the source of truth inside a versioned `.tar.gz` archive. The archive carries ACME state, console configuration, and UCI configuration; an explicit export option adds only local certificate/key files referenced by deploy profiles. Preview and restore use the existing authorization path and reject unsafe archive entries.
 
 **Tech Stack:** LuCI JavaScript view, existing `fs.exec_direct` acmeshctl bridge, shell host tests.
 
@@ -12,8 +12,8 @@
 
 - Export includes sensitive fields such as DNS credentials, pasted PEM, and SSH deployment settings.
 - Import is overwrite-only for now.
-- Import accepts file upload or pasted JSON.
-- Import shows a parsed summary before saving.
+- Import accepts the migration `.tar.gz` archive and shows a backend-validated summary before restoring.
+- Remembered authorization records and the router instance identifier are never migrated.
 - Do not create a second database or a second config path.
 
 ---
@@ -27,11 +27,11 @@
 
 **Interfaces:**
 - Consumes: existing `config`, `saveConfig()`, `run([ 'config-get' ])`, `ui.addNotification`.
-- Produces: `buildMigrationEnvelope()`, `parseMigrationConfig()`, `renderConfigMigration()`.
+- Produces: a versioned migration archive protocol and `renderConfigMigration()`.
 
-- [ ] **Step 1: Write failing tests**
+- [x] **Step 1: Write failing tests**
 
-Add marker tests for `renderConfigMigration`, `buildMigrationEnvelope`, `parseMigrationConfig`, `Import configuration`, `Export configuration`, `Paste configuration JSON`, and `Overwrite current configuration`.
+Add marker tests for `renderConfigMigration`, archive export/import, the deployment-certificate option, and the restore authorization path.
 
 - [ ] **Step 2: Run tests to verify failure**
 
@@ -40,7 +40,7 @@ Expected: FAIL because the new migration markers are absent.
 
 - [ ] **Step 3: Implement frontend panel**
 
-Add export download, pasted JSON import, file import, summary generation, and overwrite save using `config-save`.
+Add archive download, deployment-certificate selection, archive upload/preview, and authorized restore through `import-preview`/`import-apply`.
 
 - [ ] **Step 4: Run focused and full tests**
 

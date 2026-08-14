@@ -28,7 +28,7 @@ acmesh_operation_snapshot_reset() {
 	unset ACMESH_AUTH_HOSTKEY_FINGERPRINT ACMESH_AUTH_KEY_FILE ACMESH_AUTH_FULLCHAIN_FILE ACMESH_AUTH_CERT_FILE ACMESH_AUTH_CA_FILE
 	unset ACMESH_AUTH_RELOAD ACMESH_AUTH_SUDO_MODE ACMESH_AUTH_OWNER ACMESH_AUTH_GROUP ACMESH_AUTH_MODE ACMESH_AUTH_ACME_HOME ACMESH_AUTH_CORE_TAG ACMESH_AUTH_CORE_EMAIL
 	unset ACMESH_AUTH_PUBLIC_IDENTITY_DIGEST ACMESH_AUTH_SOURCE_FORMAT ACMESH_AUTH_TARGET_CLIENT ACMESH_AUTH_TARGET_FORMAT
-	unset ACMESH_AUTH_CONFIG_DIGEST ACMESH_AUTH_OVERWRITE_MODE ACMESH_AUTH_EXPORT_SCOPE
+	unset ACMESH_AUTH_CONFIG_DIGEST ACMESH_AUTH_OVERWRITE_MODE ACMESH_AUTH_EXPORT_SCOPE ACMESH_AUTH_EXPORT_CERTS
 	unset ACMESH_AUTH_OBJECT_IDENTITY ACMESH_AUTH_OBJECT_DIGEST ACMESH_AUTH_VARIANT
 	unset ACMESH_OPERATION_USES_ONCE_CONVERSION ACMESH_OPERATION_CONVERSION_FINGERPRINT ACMESH_OPERATION_RESOLVED_FILE
 }
@@ -213,8 +213,13 @@ acmesh_operation_recompute() {
 		secret-export:config)
 			acmesh_operation_snapshot_reset
 			config_path="$(acmesh_config_path)"; [ -f "$config_path" ] && [ ! -L "$config_path" ] && acmesh_config_validate_file "$config_path" || return 1
-			ACMESH_AUTH_CONFIG_DIGEST="$(sha256sum "$config_path" | awk '{print $1}')" ACMESH_AUTH_EXPORT_SCOPE=config-with-secrets
-			export ACMESH_AUTH_CONFIG_DIGEST ACMESH_AUTH_EXPORT_SCOPE
+			case "$recompute_subject_id" in
+				migration-archive) ACMESH_AUTH_EXPORT_SCOPE=migration-archive; ACMESH_AUTH_EXPORT_CERTS=false ;;
+				migration-archive-with-deployment-certs) ACMESH_AUTH_EXPORT_SCOPE=migration-archive-with-deployment-certs; ACMESH_AUTH_EXPORT_CERTS=true ;;
+				*) return 2 ;;
+			esac
+			ACMESH_AUTH_CONFIG_DIGEST="$(sha256sum "$config_path" | awk '{print $1}')"
+			export ACMESH_AUTH_CONFIG_DIGEST ACMESH_AUTH_EXPORT_SCOPE ACMESH_AUTH_EXPORT_CERTS
 			acmesh_auth_snapshot secret-export config "$recompute_subject_id" "$recompute_snapshot" && acmesh_auth_summary "$recompute_snapshot" "$recompute_summary" ;;
 		certificate-revoke:certificate|certificate-remove:certificate)
 			acmesh_operation_snapshot_reset
@@ -300,7 +305,7 @@ acmesh_operation_direct_dispatch() {
 	operation="$1" subject_id="$2"
 	case "$operation" in
 		import-apply) acmesh_config_apply_pending "$subject_id" || return 1; printf '{"ok":true,"authorized":true,"applied":true,"configDigest":"%s"}\n' "$subject_id" ;;
-		secret-export) acmesh_config_secret_export_expected "$ACMESH_AUTH_CONFIG_DIGEST" ;;
+		secret-export) acmesh_migration_archive_response "$ACMESH_AUTH_EXPORT_CERTS" "$ACMESH_AUTH_CONFIG_DIGEST" ;;
 		profile-delete)
 			case "$subject_id" in account.*) profile_kind=account; profile_id="${subject_id#account.}";; issue.*) profile_kind=issue; profile_id="${subject_id#issue.}";; deploy.*) profile_kind=deploy; profile_id="${subject_id#deploy.}";; *) return 2;; esac
 			acmesh_config_delete_profile "$profile_kind" "$profile_id" "$ACMESH_AUTH_CONFIG_DIGEST"

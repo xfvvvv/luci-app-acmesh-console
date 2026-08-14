@@ -1092,6 +1092,45 @@ msgstr "設定をインポートしました"
 msgid "Overwrite current configuration"
 msgstr "現在の設定を上書き"
 
+msgid "Download a .tar.gz migration archive containing ACME state and console configuration."
+msgstr "ACME 状態とコンソール設定を含む .tar.gz 移行アーカイブをダウンロードします。"
+
+msgid "The archive contains sensitive ACME account data and console credentials. Deployment certificates are included only when selected."
+msgstr "アーカイブには機密性の高い ACME アカウント情報とコンソール資格情報が含まれます。選択した場合のみデプロイ証明書を含めます。"
+
+msgid "Include deployment certificates"
+msgstr "デプロイ証明書を含める"
+
+msgid "Exported archive"
+msgstr "アーカイブをエクスポートしました"
+
+msgid "Archive selected. Preview it before applying."
+msgstr "アーカイブを選択しました。適用前にプレビューしてください。"
+
+msgid "Unable to read selected archive"
+msgstr "選択したアーカイブを読み取れません"
+
+msgid "Migration archive exceeds the 16 MiB limit"
+msgstr "移行アーカイブが 16 MiB の上限を超えています"
+
+msgid "Select a .tar.gz migration archive first"
+msgstr "先に .tar.gz 移行アーカイブを選択してください"
+
+msgid "Archive preview failed"
+msgstr "アーカイブのプレビューに失敗しました"
+
+msgid "Imported archive summary"
+msgstr "インポートしたアーカイブの概要"
+
+msgid "Preview the archive before applying"
+msgstr "適用前にアーカイブをプレビューしてください"
+
+msgid "Migration archive imported"
+msgstr "移行アーカイブをインポートしました"
+
+msgid "Restore migration archive"
+msgstr "移行アーカイブを復元"
+
 msgid "The SSH private key is in OpenSSH format, but this router is using Dropbear. Convert it temporarily and retry the deployment."
 msgstr "SSH 秘密鍵は OpenSSH 形式ですが、このルーターは Dropbear を使用しています。一時的に変換してデプロイを再試行してください。"
 

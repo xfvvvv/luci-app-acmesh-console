@@ -1092,6 +1092,45 @@ msgstr "配置已导入"
 msgid "Overwrite current configuration"
 msgstr "覆盖当前配置"
 
+msgid "Download a .tar.gz migration archive containing ACME state and console configuration."
+msgstr "下载包含 ACME 状态和控制台配置的 .tar.gz 迁移归档。"
+
+msgid "The archive contains sensitive ACME account data and console credentials. Deployment certificates are included only when selected."
+msgstr "归档包含敏感的 ACME 账户数据和控制台凭据。只有选择后才会包含部署证书。"
+
+msgid "Include deployment certificates"
+msgstr "包含部署证书"
+
+msgid "Exported archive"
+msgstr "已导出归档"
+
+msgid "Archive selected. Preview it before applying."
+msgstr "已选择归档。应用前请先预览。"
+
+msgid "Unable to read selected archive"
+msgstr "无法读取所选归档"
+
+msgid "Migration archive exceeds the 16 MiB limit"
+msgstr "迁移归档超过 16 MiB 限制"
+
+msgid "Select a .tar.gz migration archive first"
+msgstr "请先选择 .tar.gz 迁移归档"
+
+msgid "Archive preview failed"
+msgstr "归档预览失败"
+
+msgid "Imported archive summary"
+msgstr "导入归档摘要"
+
+msgid "Preview the archive before applying"
+msgstr "应用前请先预览归档"
+
+msgid "Migration archive imported"
+msgstr "迁移归档已导入"
+
+msgid "Restore migration archive"
+msgstr "恢复迁移归档"
+
 msgid "The SSH private key is in OpenSSH format, but this router is using Dropbear. Convert it temporarily and retry the deployment."
 msgstr "SSH 私钥是 OpenSSH 格式，但当前路由器使用 Dropbear。请临时转换后重试部署。"
 

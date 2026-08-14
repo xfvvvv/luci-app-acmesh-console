@@ -155,11 +155,13 @@ case "$dns_log" in *'Domain: request-dns.example'*'Provider: dns_cf'*'CF_Token=*
 case "$dns_log" in *'dns-secret-token'*) echo "request-file dns-test leaked credential"; exit 1 ;; esac
 
 import_request="$TMP/import-request.json"
-import_envelope='{"format":"acmesh-console-config","version":1,"config":{"schemaVersion":2,"global":{"defaultAccountEmail":"imported@example.org","coreTag":"v3.1.4","acmeHome":"/etc/acme"},"accountProfiles":[],"issueProfiles":[],"deployProfiles":[]}}'
-import_escaped="$(printf '%s' "$import_envelope" | sed 's/\\/\\\\/g; s/"/\\"/g')"
-printf '{"payload":"%s"}\n' "$import_escaped" > "$import_request"
+printf '%s\n' '{"payload":"{\"format\":\"acmesh-console-config\",\"version\":1,\"config\":{}}"}' > "$import_request"
+set +e
 preview_out="$(sh "$CTL" import-preview --request-file "$import_request")"
-case "$preview_out" in *'"ok":true'*'"previewId"'*'"configDigest"'*) ;; *) echo "import-preview request command is not aligned"; echo "$preview_out"; exit 1 ;; esac
+preview_rc=$?
+set -e
+[ "$preview_rc" = 2 ] || { echo "legacy JSON import should be rejected"; echo "$preview_out"; exit 1; }
+printf '%s' "$preview_out" | grep -F 'migration archive required' >/dev/null
 
 set +e
 not_implemented="$(sh "$CTL" authorization-execute --request-file "$issue_request")"

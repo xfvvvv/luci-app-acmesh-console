@@ -59,6 +59,7 @@ LIB_DIR="$ACMESH_LIB_DIR"
 . "$LIB_DIR/deploy.sh"
 . "$LIB_DIR/ssh.sh"
 . "$LIB_DIR/config.sh"
+. "$LIB_DIR/migration.sh"
 . "$LIB_DIR/request_payload.sh"
 . "$LIB_DIR/authorization.sh"
 . "$LIB_DIR/operation.sh"
@@ -674,9 +675,12 @@ case "$cmd" in
 		acmesh_operation_execute_challenge "$request_file"
 		;;
 	secret-export)
-		scope="$(acmesh_request_value "$request_file" scope config-with-secrets)"
-		[ "$scope" = config-with-secrets ] || { printf '{"ok":false,"error":"unsupported export scope"}\n'; exit 2; }
-		acmesh_operation_start secret-export config current "$request_file"
+		scope="$(acmesh_request_value "$request_file" scope '')"
+		case "$scope" in
+			migration-archive|migration-archive-with-deployment-certs) ;;
+			*) printf '{"ok":false,"error":"unsupported export scope"}\n'; exit 2 ;;
+		esac
+		acmesh_operation_start secret-export config "$scope" "$request_file"
 		;;
 	certificate-revoke|certificate-remove)
 		domain="$(acmesh_request_value "$request_file" domain '')" key_type="$(acmesh_request_value "$request_file" keyType rsa)"
