@@ -12,7 +12,7 @@ function requestId() {
 
 function read(method, args) {
 	return fs.exec_direct('/usr/libexec/acmesh-console/rpc-read',
-		[ method ].concat(args || []), 'json', false, true);
+		[ method ].concat(args || []), 'json', false, false);
 }
 
 function write(method, payload) {
@@ -20,7 +20,7 @@ function write(method, payload) {
 	const path = '/var/run/acmesh-console/requests/' + id + '.json';
 	return fs.write(path, JSON.stringify(payload || {}), 384).then(function() {
 		return fs.exec_direct('/usr/libexec/acmesh-console/rpc-write',
-			[ method, '--request-id', id ], 'json', false, true);
+			[ method, '--request-id', id ], 'json', false, false);
 	}).finally(function() {
 		return L.resolveDefault(fs.remove(path), 0);
 	});
