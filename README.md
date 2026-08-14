@@ -45,9 +45,9 @@ The issue profile table exposes two explicit choices: **Issue** authorizes certi
 
 There is no global test mode, debug bypass, `--yes`, `--force-all` or disable-confirmations switch. Test mode performs command validation without ACME requests, DNS changes, file deployment, service reloads or remembered authorization. Let's Encrypt Staging remains a real remote ACME service and is not treated as test mode.
 
-Private state is stored under `/etc/acmesh-console` using `0700` directories and `0600` private files. Remembered authorization, the router instance identifier, and pinned SSH host identities stay local to the router and are deliberately excluded from migration archives.
+Private state is stored under `/etc/acmesh-console` using `0700` directories and `0600` private files. The console-managed SSH key pair under `/etc/acmesh-console/ssh` is part of the deployment state and is included in migration archives when present, so configured SSH deployments continue to work after migration. Remembered authorization, the router instance identifier, and pinned SSH host identities stay local to the router and are deliberately excluded from migration archives.
 
-Configuration migration downloads a `.tar.gz` archive containing `/etc/acme`, the console configuration under `/etc/acmesh-console`, and `/etc/config/acmesh-console`. The export dialog can additionally include the local certificate and key files actually referenced by deploy profiles; it never packages the whole `/etc/ssl` directory or remote SSH targets. These archives contain sensitive credentials and must be stored securely. The package also registers `/etc/acme` with OpenWrt's sysupgrade keep list; `/etc/ssl` is not added to that automatic list.
+Configuration migration downloads a `.tar.gz` archive containing `/etc/acme`, the console configuration and console-managed SSH key pair under `/etc/acmesh-console`, and `/etc/config/acmesh-console`. The export dialog can additionally include the local certificate and key files actually referenced by deploy profiles; it never packages the whole `/etc/ssl` directory or remote SSH targets. These archives contain sensitive credentials and must be stored securely. The package also registers `/etc/acme` with OpenWrt's sysupgrade keep list; `/etc/acmesh-console` and `/etc/ssl` are not added to that automatic list.
 
 ### Compatibility and installation
 
@@ -125,7 +125,7 @@ OpenWrt 24.10 向けに IPK、OpenWrt SNAPSHOT 向けに APK を提供します�
 - SSH 安全：首次连接显示算法与 SHA-256 指纹，固定后拒绝主机密钥变化；
 - 后台任务：原子化任务状态、阶段、退出码、摘要和脱敏日志；
 - 核心管理：安装或升级选定版本的官方 `acme.sh`；
-- 配置迁移：导入和导出配置，同时排除路由器本地信任状态；
+- 配置迁移：导入和导出配置及控制台自己管理的 SSH 密钥对，同时排除路由器本地信任状态；
 - 风险授权：支持仅本次执行，以及在允许的操作上记住精确授权；
 - 英文默认界面，以及简体中文、繁体中文、日语和韩语本地化；
 - GitHub Actions 多架构 IPK / APK 构建和 Release 发布。
@@ -160,7 +160,7 @@ OpenWrt 24.10 向けに IPK、OpenWrt SNAPSHOT 向けに APK を提供します�
 
 目录权限为 `0700`，私密文件为 `0600`。DNS 凭据、密码、PEM、私钥、任务私有文件和迁移导出内容不会写入公开日志。
 
-配置迁移会下载 `.tar.gz` 归档，包含 `/etc/acme`、`/etc/acmesh-console` 中的控制台配置以及 `/etc/config/acmesh-console`。导出界面可以额外选择收集部署配置实际引用的本地证书和私钥文件；不会打包整个 `/etc/ssl`，也不会读取 SSH 远端目标。归档包含敏感凭据，必须安全保存。本包仍会将 `/etc/acme` 注册到 OpenWrt 的 sysupgrade 保留清单；`/etc/ssl` 不会加入自动保留清单。
+配置迁移会下载 `.tar.gz` 归档，包含 `/etc/acme`、`/etc/acmesh-console` 中的控制台配置和控制台自己管理的 SSH 密钥对，以及 `/etc/config/acmesh-console`。保留这组 SSH 密钥是为了让已有 SSH 部署配置在迁移后继续使用；它是本项目的运行状态，不是用户随意放入的外部文件。导出界面可以额外选择收集部署配置实际引用的本地证书和私钥文件；不会打包整个 `/etc/ssl`，也不会读取 SSH 远端目标。归档包含敏感凭据，必须安全保存。本包仍会将 `/etc/acme` 注册到 OpenWrt 的 sysupgrade 保留清单；`/etc/acmesh-console` 和 `/etc/ssl` 不会加入自动保留清单。
 
 ### 没有全局绕过开关
 
@@ -249,12 +249,13 @@ Let's Encrypt Staging 是真实的远程 ACME 服务，仍可能执行 DNS 验�
 
 导出的配置可能包含 DNS 凭据和证书资料，必须视为敏感文件。
 
+控制台自己管理的 SSH 密钥对位于 `/etc/acmesh-console/ssh/id_ed25519` 和 `/etc/acmesh-console/ssh/id_ed25519.pub`，迁移时会保留它们，以避免原远端主机上的公钥授权失效。
+
 迁移数据不会包含：
 
 - 路由器实例身份；
 - 已记住的风险授权；
 - 固定的 SSH 主机身份；
-- 控制台自身 SSH 私钥；
 - 任务、日志和待确认挑战。
 
 因此，把配置导入另一台路由器不会同时导入原路由器的信任关系。
