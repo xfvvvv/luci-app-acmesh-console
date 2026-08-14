@@ -151,7 +151,7 @@ function appendCurrent(msg, text) {
 }
 
 function emitMsg(msg, chunks, entries, offsetRef) {
-	if (msg.id != null && msg.val[0] != null) {
+	if (msg.id != null && msg.id !== '' && msg.val[0] != null) {
 		for (let i = 0; i <= msg.pluralNum; i++) {
 			if (msg.val[i] == null)
 				continue;

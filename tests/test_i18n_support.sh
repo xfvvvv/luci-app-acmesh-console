@@ -93,6 +93,17 @@ if (offset <= 0 || offset >= data.length || entries < 10 || entries % 1 !== 0) {
 	console.error(`invalid ${locale} lmo index: offset=${offset} entries=${entries}`);
 	process.exit(1);
 }
+for (let i = 0; i < entries; i++) {
+	const keyId = data.readUInt32BE(offset + i * 16);
+	if (keyId === 0) {
+		console.error(`generated ${locale} lmo contains a PO header entry`);
+		process.exit(1);
+	}
+}
+if (data.includes(Buffer.from('Project-Id-Version:'))) {
+	console.error(`generated ${locale} lmo contains PO header text`);
+	process.exit(1);
+}
 NODE
 done
 
