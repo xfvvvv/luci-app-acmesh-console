@@ -57,9 +57,11 @@ Configuration migration downloads a `.tar.gz` archive containing `/etc/acme`, th
 | OpenWrt SNAPSHOT | `.apk` | `apk` |
 | ImmortalWrt 25.12.1 | `.apk` | `apk` |
 
+ImmortalWrt 25.12.1 x86/64 is a runtime compatibility target for the APK format, not a separate firmware build target.
+
 Download the main package and the required language package from [Releases](https://github.com/chelal233/luci-app-acmesh-console/releases), verify `SHA256SUMS`, then install them with the matching package manager. Translation packages use the suffixes `zh-cn`, `zh-tw`, `ja` and `ko`. This project is not an Entware package and does not publish `.opk` aliases.
 
-After installation, open **LuCI → Services → acme.sh Console**. See the [Simplified Chinese documentation](#简体中文) below for complete installation, operation, CLI, build and verification instructions.
+After installation, open **LuCI → Services → acme.sh Console**. See the [Simplified Chinese documentation](#简体中文) below for operation, CLI, migration, package build and verification details.
 
 [`acmesh-official/acme.sh`](https://github.com/acmesh-official/acme.sh) is the sole authority for ACME client behavior. This console is independent and does not fork, replace or reinterpret the official client.
 
@@ -89,7 +91,7 @@ After installation, open **LuCI → Services → acme.sh Console**. See the [Sim
 
 グローバルなテストモード、デバッグ回避、`--yes`、`--force-all`、全確認無効化オプションはありません。秘密データは `/etc/acmesh-console` に保存され、ディレクトリは `0700`、秘密ファイルは `0600` です。
 
-OpenWrt 24.10 向けに IPK、OpenWrt SNAPSHOT と ImmortalWrt 25.12.1 向けに APK を提供します。パッケージは [Releases](https://github.com/chelal233/luci-app-acmesh-console/releases) から取得し、`SHA256SUMS` を確認してからインストールしてください。詳細な手順は下記の[簡体字中国語ドキュメント](#简体中文)を参照してください。
+OpenWrt 24.10 向けに IPK、OpenWrt SNAPSHOT 向けに APK を提供します。ImmortalWrt 25.12.1 x86/64 は APK の実行互換性確認対象です。パッケージは [Releases](https://github.com/chelal233/luci-app-acmesh-console/releases) から取得し、`SHA256SUMS` を確認してからインストールしてください。詳細な手順は下記の[簡体字中国語ドキュメント](#简体中文)を参照してください。
 
 公式 [`acmesh-official/acme.sh`](https://github.com/acmesh-official/acme.sh) が ACME 動作の唯一の正規情報源です。本プロジェクトは公式クライアントを置換、フォーク、再解釈しません。
 
@@ -176,7 +178,7 @@ OpenWrt 24.10 向けに IPK、OpenWrt SNAPSHOT と ImmortalWrt 25.12.1 向けに
 | --- | --- | --- | --- |
 | OpenWrt 24.10 | `.ipk` | `opkg` | GitHub Actions 发布目标 |
 | OpenWrt SNAPSHOT | `.apk` | `apk` | GitHub Actions 发布目标 |
-| ImmortalWrt 25.12.1 | `.apk` | `apk` | 已完成 x86-64 SDK 实际构建验证 |
+| ImmortalWrt 25.12.1 x86/64 | `.apk` | `apk` | 路由器端运行兼容性目标，不是独立固件构建目标 |
 
 本项目不是 Entware 软件包，因此不会生成容易造成误解的 `.opk` 别名。
 
@@ -280,18 +282,14 @@ printf '%s\n' '{"profileId":"example"}' | \
 - OpenWrt 24.10 IPK；
 - OpenWrt SNAPSHOT APK。
 
-在 Actions 中手动运行 **Build release packages** 可以下载构建产物。项目版本仅由 `PKG_VERSION` 表示；每次代码发布都递增 `PKG_VERSION`，并推送完全匹配的标签，例如 `PKG_VERSION:=0.1.5` 对应 `v0.1.5`；该标签会自动创建或更新 GitHub Release，并附加所有包和 SHA-256 校验文件。
-
-Windows + WSL2、ImmortalWrt SDK、完整源码、ImageBuilder、x86-64/ext4 镜像和路由器验收流程参见：
-
-- [ImmortalWrt 编译、打包与升级工作流](docs/IMMORTALWRT_BUILD_WORKFLOW.md)
+在 Actions 中手动运行 **Build release packages** 可以下载构建产物。项目版本仅由 `PKG_VERSION` 表示；每次代码发布都递增 `PKG_VERSION`，并推送完全匹配的标签，例如 `PKG_VERSION:=0.1.6` 对应 `v0.1.6`；该标签会自动创建或更新 GitHub Release，并附加所有包和 SHA-256 校验文件。此 workflow 只构建插件 IPK/APK 软件包，不构建 OpenWrt 固件。
 
 ### 测试与发布门槛
 
-在安装了测试源码的路由器上执行：
+在仓库根目录执行主机测试：
 
 ```sh
-sh /usr/libexec/acmesh-console/tests/run_host_tests.sh
+bash tests/run_host_tests.sh
 ```
 
 完整测试必须以以下内容结束：
