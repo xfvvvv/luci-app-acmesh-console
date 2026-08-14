@@ -135,7 +135,7 @@ LUCI_TITLE:=acme.sh Console
 LUCI_DEPENDS:=+luci-base +rpcd +rpcd-mod-file +rpcd-mod-uci +openssl-util +ca-bundle
 
 PKG_NAME:=luci-app-acmesh-console
-PKG_VERSION:=0.1.1
+PKG_VERSION:=0.1.2
 PKG_LICENSE:=GPL-3.0-or-later
 
 include ../../luci.mk
