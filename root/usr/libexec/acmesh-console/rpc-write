@@ -7,11 +7,14 @@ LIB_DIR="${ACMESH_LIB_DIR:-/usr/libexec/acmesh-console/lib}"
 ACMESHCTL="${ACMESHCTL:-/usr/libexec/acmesh-console/acmeshctl}"
 method="${1:-}"
 shift || true
+cleanup_only=0
+command=""
 
 case "$method" in
 	config_get) command=config-get ;;
 	config_save) command=config-save ;;
 	import_preview) command=import-preview ;;
+	import_preview_cleanup) cleanup_only=1 ;;
 	import_apply) command=import-apply ;;
 	secret_export) command=secret-export ;;
 	issue) command=issue ;;
@@ -38,6 +41,7 @@ case "$method" in
 esac
 
 request_id=""
+chunk_count=""
 while [ "$#" -gt 0 ]; do
 	case "$1" in
 		--request-id)
@@ -48,12 +52,45 @@ while [ "$#" -gt 0 ]; do
 			request_id="$2"
 			shift 2
 			;;
+		--chunk-count)
+			[ "$#" -ge 2 ] || {
+				printf '{"ok":false,"error":"unsupported argument"}\n'
+				exit 2
+			}
+			chunk_count="$2"
+			shift 2
+			;;
 		*)
 			printf '{"ok":false,"error":"unsupported argument"}\n'
 			exit 2
 			;;
 	esac
 done
+
+if [ "$cleanup_only" = 1 ]; then
+	[ -n "$request_id" ] && [ -n "$chunk_count" ] || {
+		printf '{"ok":false,"error":"chunk cleanup arguments required"}\n'
+		exit 2
+	}
+	if ! acmesh_request_remove_chunks "$request_id" "$chunk_count"; then
+		printf '{"ok":false,"error":"chunk cleanup failed"}\n'
+		exit 1
+	fi
+	printf '{"ok":true}\n'
+	exit 0
+fi
+
+if [ -n "$chunk_count" ]; then
+	[ "$method" = import_preview ] || {
+		printf '{"ok":false,"error":"chunked requests only support import preview"}\n'
+		exit 2
+	}
+	if ! acmesh_request_assemble_chunks "$request_id" "$chunk_count"; then
+		printf '{"ok":false,"error":"request chunks unavailable"}\n'
+		exit 1
+	fi
+fi
+
 request_file="$(acmesh_request_consume "$request_id")" || {
 	rc=$?
 	printf '%s\n' "$request_file"

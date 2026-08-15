@@ -86,6 +86,42 @@ else
 fi
 [ "$(cat "$outside")" = '{"outside":true}' ]
 
+chunk_id="bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+printf '%s' '{"archiveBase64":"chunked' > "$ACMESH_REQUEST_DIR/$chunk_id.part.0"
+printf '%s' '"}' > "$ACMESH_REQUEST_DIR/$chunk_id.part.1"
+chmod 600 "$ACMESH_REQUEST_DIR/$chunk_id.part.0" "$ACMESH_REQUEST_DIR/$chunk_id.part.1"
+acmesh_request_assemble_chunks "$chunk_id" 2
+[ "$(cat "$ACMESH_REQUEST_DIR/$chunk_id.json")" = '{"archiveBase64":"chunked"}' ] || {
+	echo "chunk assembly should preserve the request payload"
+	exit 1
+}
+[ "$(acmesh_test_mode "$ACMESH_REQUEST_DIR/$chunk_id.json")" = 600 ] || {
+	echo "assembled requests should be private"
+	exit 1
+}
+[ ! -e "$ACMESH_REQUEST_DIR/$chunk_id.part.0" ] || { echo "assembled chunks should be removed"; exit 1; }
+[ ! -e "$ACMESH_REQUEST_DIR/$chunk_id.part.1" ] || { echo "assembled chunks should be removed"; exit 1; }
+rm -f "$ACMESH_REQUEST_DIR/$chunk_id.json"
+
+chunk_symlink_id="cccccccccccccccccccccccccccccccc"
+chunk_outside="$ROOT/tests/.tmp/chunk-outside"
+printf '%s' 'not-trusted' > "$chunk_outside"
+chmod 600 "$chunk_outside"
+ln -s "$chunk_outside" "$ACMESH_REQUEST_DIR/$chunk_symlink_id.part.0"
+if acmesh_request_assemble_chunks "$chunk_symlink_id" 1; then
+	echo "symlink chunks should be rejected"
+	exit 1
+fi
+[ ! -e "$ACMESH_REQUEST_DIR/$chunk_symlink_id.json" ] || { echo "rejected chunks should not publish a request"; exit 1; }
+
+chunk_cleanup_id="dddddddddddddddddddddddddddddddd"
+printf '%s' 'stale-0' > "$ACMESH_REQUEST_DIR/$chunk_cleanup_id.part.0"
+printf '%s' 'stale-1' > "$ACMESH_REQUEST_DIR/$chunk_cleanup_id.part.1"
+chmod 600 "$ACMESH_REQUEST_DIR/$chunk_cleanup_id.part.0" "$ACMESH_REQUEST_DIR/$chunk_cleanup_id.part.1"
+acmesh_request_remove_chunks "$chunk_cleanup_id" 2
+[ ! -e "$ACMESH_REQUEST_DIR/$chunk_cleanup_id.part.0" ] || { echo "chunk cleanup should remove part 0"; exit 1; }
+[ ! -e "$ACMESH_REQUEST_DIR/$chunk_cleanup_id.part.1" ] || { echo "chunk cleanup should remove part 1"; exit 1; }
+
 trusted_request_dir="$ACMESH_REQUEST_DIR"
 symlink_inbox_outside="$ROOT/tests/.tmp/symlink-inbox-outside"
 symlink_inbox="$ROOT/tests/.tmp/symlink-inbox"
