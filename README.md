@@ -47,7 +47,7 @@ There is no global test mode, debug bypass, `--yes`, `--force-all` or disable-co
 
 Private state is stored under `/etc/acmesh-console` using `0700` directories and `0600` private files. The console-managed SSH key pair under `/etc/acmesh-console/ssh` is part of the deployment state and is included in migration archives when present, so configured SSH deployments continue to work after migration. Remembered authorization, the router instance identifier, and pinned SSH host identities stay local to the router and are deliberately excluded from migration archives.
 
-Configuration migration downloads a `.tar.gz` archive containing `/etc/acme`, the console configuration and console-managed SSH key pair under `/etc/acmesh-console`, and `/etc/config/acmesh-console`. The export dialog can additionally include the local certificate and key files actually referenced by deploy profiles; it never packages the whole `/etc/ssl` directory or remote SSH targets. These archives contain sensitive credentials and must be stored securely. The package also registers `/etc/acme` with OpenWrt's sysupgrade keep list; `/etc/acmesh-console` and `/etc/ssl` are not added to that automatic list.
+Configuration migration downloads a `.tar.gz` archive containing `/etc/acme`, the console configuration and console-managed SSH key pair under `/etc/acmesh-console`, and `/etc/config/acmesh-console`. The export dialog can additionally include the local certificate and key files actually referenced by deploy profiles; it never packages the whole `/etc/ssl` directory or remote SSH targets. These archives contain sensitive credentials and must be stored securely. Do not manually extract them over `/`; use the console preview and restore flow so path and permission checks are applied. The package also registers `/etc/acme` with OpenWrt's sysupgrade keep list; `/etc/acmesh-console` and `/etc/ssl` are not added to that automatic list.
 
 ### Compatibility and installation
 
@@ -160,7 +160,7 @@ OpenWrt 24.10 向けに IPK、OpenWrt SNAPSHOT 向けに APK を提供します�
 
 目录权限为 `0700`，私密文件为 `0600`。DNS 凭据、密码、PEM、私钥、任务私有文件和迁移导出内容不会写入公开日志。
 
-配置迁移会下载 `.tar.gz` 归档，包含 `/etc/acme`、`/etc/acmesh-console` 中的控制台配置和控制台自己管理的 SSH 密钥对，以及 `/etc/config/acmesh-console`。保留这组 SSH 密钥是为了让已有 SSH 部署配置在迁移后继续使用；它是本项目的运行状态，不是用户随意放入的外部文件。导出界面可以额外选择收集部署配置实际引用的本地证书和私钥文件；不会打包整个 `/etc/ssl`，也不会读取 SSH 远端目标。归档包含敏感凭据，必须安全保存。本包仍会将 `/etc/acme` 注册到 OpenWrt 的 sysupgrade 保留清单；`/etc/acmesh-console` 和 `/etc/ssl` 不会加入自动保留清单。
+配置迁移会下载 `.tar.gz` 归档，包含 `/etc/acme`、`/etc/acmesh-console` 中的控制台配置和控制台自己管理的 SSH 密钥对，以及 `/etc/config/acmesh-console`。保留这组 SSH 密钥是为了让已有 SSH 部署配置在迁移后继续使用；它是本项目的运行状态，不是用户随意放入的外部文件。导出界面可以额外选择收集部署配置实际引用的本地证书和私钥文件；不会打包整个 `/etc/ssl`，也不会读取 SSH 远端目标。归档包含敏感凭据，必须安全保存。不要手动将归档解压覆盖到 `/`；请使用控制台的预览和恢复流程，以便执行路径和权限检查。本包仍会将 `/etc/acme` 注册到 OpenWrt 的 sysupgrade 保留清单；`/etc/acmesh-console` 和 `/etc/ssl` 不会加入自动保留清单。
 
 ### 没有全局绕过开关
 

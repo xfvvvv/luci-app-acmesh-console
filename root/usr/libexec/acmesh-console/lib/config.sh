@@ -4,7 +4,7 @@
 
 : "${ACMESH_CONSOLE_CONFIG:=/etc/acmesh-console/config.json}"
 : "${ACMESH_CONSOLE_UCI_CONFIG:=/etc/config/acmesh-console}"
-: "${ACMESH_PENDING_IMPORT_DIR:=/var/run/acmesh-console/pending-imports}"
+: "${ACMESH_PENDING_IMPORT_DIR:=/var/run/acmesh-console/pending-import}"
 : "${ACMESH_CONFIG_LOCK_FILE:=${ACMESH_CONSOLE_CONFIG%/*}/config.lock}"
 : "${ACMESH_CONFIG_SECRET_PLACEHOLDER:=********}"
 

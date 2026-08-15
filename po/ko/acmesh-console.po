@@ -1119,6 +1119,15 @@ msgstr "먼저 .tar.gz 마이그레이션 아카이브를 선택하세요"
 msgid "Archive preview failed"
 msgstr "아카이브 미리 보기에 실패했습니다"
 
+msgid "Archive export failed"
+msgstr "아카이브 내보내기에 실패했습니다"
+
+msgid "Migration archive import failed"
+msgstr "마이그레이션 아카이브 가져오기에 실패했습니다"
+
+msgid "Do not manually extract migration archives over /. Use this page to preview and restore them safely."
+msgstr "마이그레이션 아카이브를 /에 수동으로 압축 해제하지 마십시오. 이 페이지에서 안전하게 미리 보고 복원하십시오."
+
 msgid "Imported archive summary"
 msgstr "가져온 아카이브 요약"
 

@@ -32,9 +32,18 @@ acmesh_migration_map_path() {
 }
 
 acmesh_migration_safe_relative() {
-	case "$1" in
-		''|/*|*\\*|*/../*|../*|*/..|..) return 1 ;;
+	safe_relative_path="$1"
+	case "$safe_relative_path" in
+		''|/*|*\\*) return 1 ;;
 	esac
+	while [ "${safe_relative_path%/}" != "$safe_relative_path" ]; do
+		safe_relative_path=${safe_relative_path%/}
+	done
+	[ -n "$safe_relative_path" ] || return 1
+	case "$safe_relative_path" in
+		*/../*|../*|*/..|..) return 1 ;;
+	esac
+	return 0
 }
 
 acmesh_migration_safe_file() {
@@ -59,7 +68,7 @@ acmesh_migration_copy_tree() {
 		[ "$rel" != "$path" ] || exit 1
 		acmesh_migration_safe_relative "$rel" || exit 1
 		case "$relroot/$rel" in
-			etc/acmesh-console/instance-id|etc/acmesh-console/authorization.lock|etc/acmesh-console/authorizations.json|etc/acmesh-console/authorizations.json.*|etc/acmesh-console/ssh/known_hosts) continue ;;
+			etc/acmesh-console/instance-id|etc/acmesh-console/authorization.lock|etc/acmesh-console/authorizations.json|etc/acmesh-console/authorizations.json.*|etc/acmesh-console/config.lock|etc/acmesh-console/ssh/known_hosts) continue ;;
 		esac
 		cp -p "$path" "$stage/$relroot/$rel" || exit 1
 	done || return 1
@@ -104,14 +113,24 @@ acmesh_migration_write_manifest() {
 }
 
 acmesh_migration_build_archive() {
-	include_certs="$1" archive="$2" config_path=$(acmesh_config_path)
-	acmesh_config_validate_file "$config_path" || return 1
+	include_certs="$1" archive="$2" persistent_config_path=$(acmesh_config_path)
 	parent=$(dirname "$archive"); tmp="$parent/.migration-build.$$.$(date +%s)"; stage="$tmp/stage"
 	trap 'rm -rf "$tmp"' HUP INT TERM EXIT
+	config_path="$persistent_config_path"; default_config=
+	if [ -s "$persistent_config_path" ]; then
+		acmesh_config_validate_file "$persistent_config_path" || return 1
+	else
+		default_config="$tmp/default-config.json"; config_path="$default_config"
+		(umask 077; mkdir -p "$tmp"; acmesh_config_get > "$default_config") || return 1
+		acmesh_config_validate_file "$default_config" || return 1
+	fi
 	(umask 077
 		mkdir -p "$stage/etc/acme" "$stage/etc/acmesh-console" "$stage/etc/config" || exit 1
 		acmesh_migration_copy_tree "$ACMESH_MIGRATION_ACME_ROOT" etc/acme "$stage" || exit 1
 		acmesh_migration_copy_tree "$ACMESH_MIGRATION_CONSOLE_ROOT" etc/acmesh-console "$stage" || exit 1
+		if [ -n "$default_config" ]; then
+			cp -p "$default_config" "$stage/etc/acmesh-console/config.json" || exit 1
+		fi
 		if [ -f "$ACMESH_MIGRATION_UCI_CONFIG" ] && [ ! -L "$ACMESH_MIGRATION_UCI_CONFIG" ]; then
 			cp -p "$ACMESH_MIGRATION_UCI_CONFIG" "$stage/etc/config/acmesh-console" || exit 1
 		fi
@@ -130,6 +149,10 @@ acmesh_migration_build_archive() {
 			done < "$files"
 		fi
 		acmesh_migration_write_manifest "$stage" "$include_certs" "$skipped" || exit 1
+		chmod 755 "$stage/etc" "$stage/etc/config" || exit 1
+		if [ -d "$stage/etc/ssl" ]; then
+			chmod 755 "$stage/etc/ssl" || exit 1
+		fi
 		tar -czf "$archive" -C "$stage" acmesh-console-backup.json etc || exit 1
 	) || return 1
 	bytes=$(wc -c < "$archive" | tr -d ' ')
@@ -160,6 +183,10 @@ acmesh_migration_archive_validate() {
 	while IFS= read -r entry; do
 		entry=$(printf '%s' "$entry" | sed 's#^\\./##')
 		[ -n "$entry" ] || continue
+		while [ "${entry%/}" != "$entry" ]; do
+			entry=${entry%/}
+		done
+		[ -n "$entry" ] || return 1
 		acmesh_migration_safe_relative "$entry" || return 1
 		case "$entry" in
 			acmesh-console-backup.json|etc|etc/|etc/acme|etc/acme/*|etc/acmesh-console|etc/acmesh-console/*|etc/config|etc/config/acmesh-console|etc/ssl|etc/ssl/*) ;;
@@ -189,6 +216,34 @@ acmesh_migration_archive_validate() {
 			grep -Fx "/$rel" "$deploy_paths" >/dev/null 2>&1 || exit 1
 		done || return 1
 	fi
+}
+
+acmesh_migration_prepare_destination_parent() {
+	destination="$1"
+	destination_parent_path=$(dirname "$destination")
+	mkdir -p -m 755 "$destination_parent_path"
+}
+
+acmesh_migration_prepare_destination_root() {
+	rel="$1"
+	case "$rel" in
+		etc/acme/*)
+			acmesh_migration_prepare_destination_parent "$ACMESH_MIGRATION_ACME_ROOT" || return 1
+			mkdir -p -m 700 "$ACMESH_MIGRATION_ACME_ROOT" || return 1
+			;;
+		etc/acmesh-console/*)
+			acmesh_migration_prepare_destination_parent "$ACMESH_MIGRATION_CONSOLE_ROOT" || return 1
+			mkdir -p -m 700 "$ACMESH_MIGRATION_CONSOLE_ROOT" || return 1
+			;;
+		etc/config/*)
+			acmesh_migration_prepare_destination_parent "$ACMESH_MIGRATION_UCI_CONFIG" || return 1
+			;;
+		etc/ssl/*)
+			acmesh_migration_prepare_destination_parent "$ACMESH_MIGRATION_SSL_ROOT" || return 1
+			mkdir -p -m 755 "$ACMESH_MIGRATION_SSL_ROOT" || return 1
+			;;
+		*) return 1 ;;
+	esac
 }
 
 acmesh_migration_archive_candidate() {
@@ -235,7 +290,9 @@ acmesh_migration_install_archive() {
 		fi
 	done < "$touched"
 	while IFS= read -r rel; do
-		dest=$(acmesh_migration_map_path "/$rel") || return 1; mkdir -p "$(dirname "$dest")" || return 1
+		dest=$(acmesh_migration_map_path "/$rel") || return 1
+		acmesh_migration_prepare_destination_root "$rel" || return 1
+		mkdir -p "$(dirname "$dest")" || return 1
 		tmp="$dest.acmesh-import.$$"; rm -f "$tmp"
 		if ! cp -p "$stage/$rel" "$tmp" || ! mv -f "$tmp" "$dest"; then
 			rm -f "$tmp"

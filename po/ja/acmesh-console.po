@@ -1119,6 +1119,15 @@ msgstr "先に .tar.gz 移行アーカイブを選択してください"
 msgid "Archive preview failed"
 msgstr "アーカイブのプレビューに失敗しました"
 
+msgid "Archive export failed"
+msgstr "アーカイブのエクスポートに失敗しました"
+
+msgid "Migration archive import failed"
+msgstr "移行アーカイブのインポートに失敗しました"
+
+msgid "Do not manually extract migration archives over /. Use this page to preview and restore them safely."
+msgstr "移行アーカイブを手動で / に展開しないでください。このページを使って安全にプレビューと復元を行ってください。"
+
 msgid "Imported archive summary"
 msgstr "インポートしたアーカイブの概要"
 

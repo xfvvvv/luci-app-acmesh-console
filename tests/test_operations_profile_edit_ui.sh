@@ -21,6 +21,16 @@ reject_text() {
 	fi
 }
 
+require_count_at_least() {
+	needle="$1"
+	wanted="$2"
+	actual="$(grep -F -- "$needle" "$PAGE" | wc -l | tr -d ' ')"
+	if [ "$actual" -lt "$wanted" ]; then
+		echo "operations page needs at least $wanted occurrences: $needle"
+		exit 1
+	fi
+}
+
 require_text "renderAccountsList"
 require_text "renderAccountEdit"
 require_text "renderIssueList"
@@ -43,6 +53,14 @@ require_text "Include deployment certificates"
 require_text "Restore migration archive"
 require_text "Imported configuration summary"
 require_text "The archive contains sensitive ACME account data and console credentials. Deployment certificates are included only when selected."
+require_text "const showMigrationError = function(result, fallback)"
+require_text "setSummary(message, false);"
+require_text "ui.addNotification(null, E('p', {}, message), 'danger');"
+require_text "showMigrationError(archive, _('Archive export failed'))"
+require_text "showMigrationError(result, _('Archive preview failed'))"
+require_text "showMigrationError(applied, _('Migration archive import failed'))"
+require_count_at_least ".catch(function(error)" 3
+require_text "Do not manually extract migration archives over /. Use this page to preview and restore them safely."
 reject_text "const envelope = buildMigrationEnvelope(config);"
 require_text "Save account"
 require_text "Save issue profile"

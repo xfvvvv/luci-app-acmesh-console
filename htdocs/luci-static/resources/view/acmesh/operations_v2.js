@@ -819,6 +819,13 @@ return view.extend({
 				summary.classList.toggle('acmesh-warning', !ok);
 			};
 
+			const showMigrationError = function(result, fallback) {
+				const message = (result && (result.error || result.message)) || fallback;
+				setSummary(message, false);
+				ui.addNotification(null, E('p', {}, message), 'danger');
+				return result || { ok: false, error: message };
+			};
+
 			const arrayBufferToBase64 = function(buffer) {
 				const bytes = new Uint8Array(buffer);
 				let binary = '';
@@ -838,8 +845,10 @@ return view.extend({
 			const exportConfig = function() {
 				const scope = includeCertificates.checked ? 'migration-archive-with-deployment-certs' : 'migration-archive';
 				return authorization.run('secret_export', { scope: scope }).then(function(archive) {
-					if (!archive || archive.cancelled || !archive.ok)
+					if (!archive || archive.cancelled)
 						return archive;
+					if (!archive.ok)
+						return showMigrationError(archive, _('Archive export failed'));
 					const blob = base64ToBlob(archive.archiveBase64);
 					const url = URL.createObjectURL(blob);
 					const link = document.createElement('a');
@@ -851,6 +860,8 @@ return view.extend({
 					URL.revokeObjectURL(url);
 					setSummary(_('Exported archive') + ': ' + archive.bytes + ' bytes', true);
 					return archive;
+				}).catch(function(error) {
+					return showMigrationError(error, _('Archive export failed'));
 				});
 			};
 
@@ -889,17 +900,20 @@ return view.extend({
 				}
 				return authorization.run('import_preview', { archiveBase64: importedArchiveBase64 }).then(function(result) {
 					if (!result || !result.ok) {
-						setSummary((result && result.error) || _('Archive preview failed'), false);
-						return result;
+						if (result && result.cancelled)
+							return result;
+						return showMigrationError(result, _('Archive preview failed'));
 					}
 					importPreviewId = result.previewId;
 					setSummary(_('Imported archive summary') + '\n' + JSON.stringify(result.summary, null, 2), true);
 					return result;
+				}).catch(function(error) {
+					return showMigrationError(error, _('Archive preview failed'));
 				});
 			};
 
 			const applyImport = function() {
-				const preview = importPreviewId ? Promise.resolve() : previewImport();
+				const preview = importPreviewId ? Promise.resolve({ ok: true }) : previewImport();
 				return preview.then(function(result) {
 					if (result && !result.ok)
 						return result;
@@ -913,14 +927,21 @@ return view.extend({
 							importPreviewId = null;
 							return refresh();
 						}
-						return applied;
+						if (applied && applied.cancelled)
+							return applied;
+						return showMigrationError(applied, _('Migration archive import failed'));
+					}).catch(function(error) {
+						return showMigrationError(error, _('Migration archive import failed'));
 					});
+				}).catch(function(error) {
+					return showMigrationError(error, _('Migration archive import failed'));
 				});
 			};
 
 			return E('div', { 'class': 'acmesh-section acmesh-migration' }, [
 				E('h3', {}, _('Configuration migration')),
 				E('p', { 'class': 'acmesh-warning' }, _('The archive contains sensitive ACME account data and console credentials. Deployment certificates are included only when selected.')),
+				E('p', { 'class': 'acmesh-warning' }, _('Do not manually extract migration archives over /. Use this page to preview and restore them safely.')),
 				E('div', { 'class': 'acmesh-migration-grid' }, [
 					E('div', { 'class': 'acmesh-card' }, [
 						E('h4', {}, _('Export configuration')),

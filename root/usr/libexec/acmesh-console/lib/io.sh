@@ -84,6 +84,22 @@ acmesh_atomic_signal_cleanup() {
 	exit 1
 }
 
+acmesh_atomic_restore_traps() {
+	acmesh_atomic_restore_traps_text="${acmesh_atomic_saved_traps-}"
+	trap - HUP INT TERM
+	[ -n "$acmesh_atomic_restore_traps_text" ] || return 0
+	while IFS= read -r acmesh_atomic_restore_trap; do
+		case "$acmesh_atomic_restore_trap" in
+			*" HUP"|*" SIGHUP") eval "$acmesh_atomic_restore_trap" || : ;;
+			*" INT"|*" SIGINT") eval "$acmesh_atomic_restore_trap" || : ;;
+			*" TERM"|*" SIGTERM") eval "$acmesh_atomic_restore_trap" || : ;;
+		esac
+	done <<EOF
+$acmesh_atomic_restore_traps_text
+EOF
+	acmesh_atomic_saved_traps=
+}
+
 acmesh_atomic_write_run() {
 	path="${1:-}"
 	mode="${2:-600}"
@@ -100,21 +116,22 @@ acmesh_atomic_write_run() {
 	acmesh_atomic_tmp=
 	acmesh_atomic_writer_pid=
 	acmesh_atomic_input_open=0
+	acmesh_atomic_saved_traps="$(trap)"
 	trap 'acmesh_atomic_signal_cleanup' HUP INT TERM
 	acmesh_atomic_tmp="$(umask 077; mktemp "$dir/.${base}.$$.XXXXXX")" || {
-		trap - HUP INT TERM
+		acmesh_atomic_restore_traps
 		return 1
 	}
 	chmod "$mode" "$acmesh_atomic_tmp" || {
 		rm -f "$acmesh_atomic_tmp"
 		acmesh_atomic_tmp=
-		trap - HUP INT TERM
+		acmesh_atomic_restore_traps
 		return 1
 	}
 	exec 5<&0 || {
 		rm -f "$acmesh_atomic_tmp"
 		acmesh_atomic_tmp=
-		trap - HUP INT TERM
+		acmesh_atomic_restore_traps
 		return 1
 	}
 	acmesh_atomic_input_open=1
@@ -127,24 +144,24 @@ acmesh_atomic_write_run() {
 		acmesh_atomic_close_input
 		rm -f "$acmesh_atomic_tmp"
 		acmesh_atomic_tmp=
-		trap - HUP INT TERM
+		acmesh_atomic_restore_traps
 		return 1
 	fi
 	acmesh_atomic_close_input
 	chmod "$mode" "$acmesh_atomic_tmp" || {
 		rm -f "$acmesh_atomic_tmp"
 		acmesh_atomic_tmp=
-		trap - HUP INT TERM
+		acmesh_atomic_restore_traps
 		return 1
 	}
 	mv -f "$acmesh_atomic_tmp" "$path" || {
 		rm -f "$acmesh_atomic_tmp"
 		acmesh_atomic_tmp=
-		trap - HUP INT TERM
+		acmesh_atomic_restore_traps
 		return 1
 	}
 	acmesh_atomic_tmp=
-	trap - HUP INT TERM
+	acmesh_atomic_restore_traps
 }
 
 acmesh_atomic_write() {

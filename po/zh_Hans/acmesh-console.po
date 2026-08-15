@@ -1119,6 +1119,15 @@ msgstr "请先选择 .tar.gz 迁移归档"
 msgid "Archive preview failed"
 msgstr "归档预览失败"
 
+msgid "Archive export failed"
+msgstr "归档导出失败"
+
+msgid "Migration archive import failed"
+msgstr "迁移归档导入失败"
+
+msgid "Do not manually extract migration archives over /. Use this page to preview and restore them safely."
+msgstr "不要手动将迁移归档解压到 / 上。请使用此页面安全地预览和恢复。"
+
 msgid "Imported archive summary"
 msgstr "导入归档摘要"
 

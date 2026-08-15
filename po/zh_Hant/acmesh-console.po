@@ -1119,6 +1119,15 @@ msgstr "請先選取 .tar.gz 遷移封存"
 msgid "Archive preview failed"
 msgstr "封存預覽失敗"
 
+msgid "Archive export failed"
+msgstr "封存匯出失敗"
+
+msgid "Migration archive import failed"
+msgstr "遷移封存匯入失敗"
+
+msgid "Do not manually extract migration archives over /. Use this page to preview and restore them safely."
+msgstr "不要手動將遷移封存解壓到 /。請使用此頁面安全地預覽與還原。"
+
 msgid "Imported archive summary"
 msgstr "匯入封存摘要"
 

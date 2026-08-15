@@ -7,11 +7,19 @@ CLEANUP="$ROOT/root/etc/uci-defaults/99-acmesh-console-cleanup"
 API_MODULE="$ROOT/htdocs/luci-static/resources/acmesh/api_v2.js"
 AUTHORIZATION_MODULE="$ROOT/htdocs/luci-static/resources/acmesh/authorization_v2.js"
 KEEPD="$ROOT/root/lib/upgrade/keep.d/luci-app-acmesh-console"
+CONFIG_MODULE="$ROOT/root/usr/libexec/acmesh-console/lib/config.sh"
+INIT_SCRIPT="$ROOT/root/etc/init.d/acmesh-console"
 
 require() { grep -F "$2" "$1" >/dev/null || { echo "missing package contract: $2"; exit 1; }; }
 
 require "$MAKEFILE" 'define Package/luci-app-acmesh-console/conffiles'
 [ -f "$ROOT/root/usr/libexec/acmesh-console/lib/migration.sh" ] || { echo 'migration library missing'; exit 1; }
+require "$CONFIG_MODULE" ': "${ACMESH_PENDING_IMPORT_DIR:=/var/run/acmesh-console/pending-import}"'
+require "$INIT_SCRIPT" '"$ACMESH_RUNTIME_DIR/pending-import"'
+if grep -Fq '/var/run/acmesh-console/pending-imports' "$CONFIG_MODULE"; then
+	echo 'pending import directory must match the init script'
+	exit 1
+fi
 for path in \
 	/etc/config/acmesh-console \
 	/etc/acmesh-console/config.json \
