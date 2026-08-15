@@ -71,6 +71,7 @@ jsonfilter() {
 		'@.version') printf '1\n' ;;
 		'@.includeDeploymentCertificates') sed -n 's/.*"includeDeploymentCertificates":\([^,}]*\).*/\1/p' "$input" ;;
 		'@.deployProfiles[*].keyFile') printf '/etc/ssl/example.key\n' ;;
+		'@.deployProfiles[*].fullchainFile'|'@.deployProfiles[*].certFile'|'@.deployProfiles[*].caFile'|'@.deployProfiles[*].sourceKeyFile'|'@.deployProfiles[*].sourceFullchainFile') : ;;
 		'@.archiveBase64') sed -n 's/.*"archiveBase64":"\([^"]*\)".*/\1/p' "$input" ;;
 		'@.accountProfiles[*]'|'@.issueProfiles[*]'|'@.deployProfiles[*]') : ;;
 		*) return 1 ;;
@@ -149,11 +150,19 @@ grep -F '"schemaVersion":2' "$default_root/etc/acmesh-console/config.json" >/dev
 	exit 1
 }
 
-acmesh_migration_collect_deploy_files() {
-	printf '%s\n' /etc/ssl/example.key > "$2"
-}
 ssl_archive="$TMP/archive-with-ssl.tar.gz"
 ( acmesh_migration_build_archive true "$ssl_archive" )
+tar -tzf "$ssl_archive" | grep -Fx 'etc/ssl/example.key' >/dev/null || {
+	echo "production deploy-file collection should include the safe SSL file"
+	exit 1
+}
+ssl_root="$TMP/ssl-root"
+mkdir "$ssl_root"
+tar -xzf "$ssl_archive" -C "$ssl_root"
+grep -F '"skippedDeploymentFiles":0' "$ssl_root/acmesh-console-backup.json" >/dev/null || {
+	echo "production deploy-file collection should not skip the safe SSL file"
+	exit 1
+}
 
 fake_root="$TMP/fake-root"
 mkdir "$fake_root"

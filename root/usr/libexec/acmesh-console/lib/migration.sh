@@ -46,13 +46,13 @@ acmesh_migration_safe_relative() {
 	return 0
 }
 
-acmesh_migration_safe_file() {
-	path="$1"
-	[ -f "$path" ] && [ ! -L "$path" ] || return 1
-	size=$(wc -c < "$path" | tr -d ' ')
-	case "$size" in ''|*[!0-9]*) return 1 ;; esac
-	[ "$size" -le "$ACMESH_MIGRATION_MAX_FILE_BYTES" ]
-}
+acmesh_migration_safe_file() (
+	safe_file_path="$1"
+	[ -f "$safe_file_path" ] && [ ! -L "$safe_file_path" ] || return 1
+	safe_file_size=$(wc -c < "$safe_file_path" | tr -d ' ')
+	case "$safe_file_size" in ''|*[!0-9]*) return 1 ;; esac
+	[ "$safe_file_size" -le "$ACMESH_MIGRATION_MAX_FILE_BYTES" ]
+)
 
 acmesh_migration_copy_tree() {
 	source="$1" relroot="$2" stage="$3"
