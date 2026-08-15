@@ -218,6 +218,12 @@ acmesh_migration_archive_validate() {
 	fi
 }
 
+acmesh_migration_archive_stage_cleanup() (
+	stage="${1:-}"
+	[ -n "$stage" ] || exit 0
+	rm -rf "$stage" "$stage.list" "$stage.types" "$stage.deploy-paths"
+)
+
 acmesh_migration_prepare_destination_parent() {
 	destination="$1"
 	destination_parent_path=$(dirname "$destination")
@@ -248,18 +254,19 @@ acmesh_migration_prepare_destination_root() {
 
 acmesh_migration_archive_candidate() {
 	archive="$1" output="$2"; parent=$(dirname "$output"); tmp="$parent/.archive-candidate.$$.$(date +%s)"
-	trap 'rm -rf "$tmp"' HUP INT TERM EXIT
+	stage="$tmp/stage"
+	trap 'rm -rf "$tmp"; acmesh_migration_archive_stage_cleanup "$stage" || true' HUP INT TERM EXIT
 	mkdir -p "$tmp/stage" || return 1
 	acmesh_migration_archive_validate "$archive" "$tmp/stage" || return 1
 	cat "$tmp/stage/etc/acmesh-console/config.json" | acmesh_atomic_write "$output" 600 || return 1
-	rm -rf "$tmp"; trap - HUP INT TERM EXIT
+	rm -rf "$tmp"; acmesh_migration_archive_stage_cleanup "$stage"; trap - HUP INT TERM EXIT
 }
 
 acmesh_migration_import_preview() (
 	set +u
 	request_file="$1"; acmesh_private_dir "$ACMESH_PENDING_IMPORT_DIR" || return 1
 	tmp="$ACMESH_PENDING_IMPORT_DIR/.archive-preview.$$.$(date +%s)"; archive="$tmp.tar.gz"; stage="$tmp.stage"; candidate="$tmp.config"
-	trap 'rm -rf "$tmp" "$archive"' HUP INT TERM EXIT
+	trap 'rm -rf "$tmp" "$archive" "$candidate"; acmesh_migration_archive_stage_cleanup "$stage" || true' HUP INT TERM EXIT
 	[ "$(jsonfilter -i "$request_file" -t '@.archiveBase64' 2>/dev/null || true)" = string ] || { printf '{"ok":false,"error":"archive payload required"}\n'; return 2; }
 	jsonfilter -i "$request_file" -e '@.archiveBase64' | base64 -d > "$archive" || { printf '{"ok":false,"error":"invalid archive encoding"}\n'; return 2; }
 	chmod 600 "$archive"; mkdir -p "$stage"
@@ -268,14 +275,14 @@ acmesh_migration_import_preview() (
 	digest=$(sha256sum "$archive" | awk '{print $1}'); pending="$ACMESH_PENDING_IMPORT_DIR/$digest.tar.gz"; mv -f "$archive" "$pending" && chmod 600 "$pending" || return 1
 	accounts=$(jsonfilter -i "$candidate" -e '@.accountProfiles[*]' 2>/dev/null | wc -l | tr -d ' '); issues=$(jsonfilter -i "$candidate" -e '@.issueProfiles[*]' 2>/dev/null | wc -l | tr -d ' '); deploys=$(jsonfilter -i "$candidate" -e '@.deployProfiles[*]' 2>/dev/null | wc -l | tr -d ' ')
 	include_certs=$(jsonfilter -i "$stage/acmesh-console-backup.json" -e '@.includeDeploymentCertificates'); files=$(find "$stage/etc" -type f 2>/dev/null | wc -l | tr -d ' ')
-	rm -rf "$tmp" "$stage" "$candidate"; trap - HUP INT TERM EXIT
+	rm -rf "$tmp" "$candidate"; acmesh_migration_archive_stage_cleanup "$stage"; trap - HUP INT TERM EXIT
 	printf '{"ok":true,"previewId":"%s","configDigest":"%s","archive":true,"summary":{"accounts":%s,"issueProfiles":%s,"deployProfiles":%s,"files":%s,"deploymentCertificates":%s}}\n' "$digest" "$digest" "$accounts" "$issues" "$deploys" "$files" "$include_certs"
 )
 
 acmesh_migration_install_archive() {
 	archive="$1"; parent="$ACMESH_PENDING_IMPORT_DIR/.archive-apply.$$.$(date +%s)"
 	stage="$parent/stage"; rollback="$parent/rollback"; touched="$parent/touched"; existing="$parent/existing"
-	trap 'rm -rf "$parent"' HUP INT TERM EXIT
+	trap 'rm -rf "$parent"; acmesh_migration_archive_stage_cleanup "$stage" || true' HUP INT TERM EXIT
 	mkdir -p "$stage" "$rollback" || return 1
 	acmesh_migration_archive_validate "$archive" "$stage" || return 1
 	find "$stage/etc" -type f -print | sed "s#^$stage/##" > "$touched" || return 1
@@ -301,5 +308,5 @@ acmesh_migration_install_archive() {
 			return 1
 		fi
 	done < "$touched"
-	rm -f "$archive"; rm -rf "$parent"; trap - HUP INT TERM EXIT
+	rm -f "$archive"; rm -rf "$parent"; acmesh_migration_archive_stage_cleanup "$stage"; trap - HUP INT TERM EXIT
 }

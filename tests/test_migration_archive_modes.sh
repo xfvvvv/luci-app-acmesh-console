@@ -109,6 +109,10 @@ case "$preview" in
 		exit 1
 		;;
 esac
+if find "$ACMESH_PENDING_IMPORT_DIR" -maxdepth 1 -name '.archive-preview.*' -print -quit | grep -q .; then
+	echo "successful import_preview must remove validation sidecars"
+	exit 1
+fi
 
 acmesh_migration_safe_relative 'etc/config/' || {
 	echo "directory entries with trailing slashes should be safe relative paths"
@@ -127,6 +131,17 @@ tar -xzf "$archive" -C "$symlink_root"
 ln -s "$TMP/outside" "$symlink_root/etc/acmesh-console/escape"
 symlink_archive="$TMP/symlink.tar.gz"
 tar -czf "$symlink_archive" -C "$symlink_root" acmesh-console-backup.json etc
+symlink_archive_b64="$(base64 "$symlink_archive" | tr -d '\n')"
+invalid_request="$TMP/invalid-import-request.json"
+printf '{"archiveBase64":"%s"}\n' "$symlink_archive_b64" > "$invalid_request"
+if acmesh_migration_import_preview "$invalid_request" >/dev/null 2>&1; then
+	echo "import_preview must reject archives containing symlinks"
+	exit 1
+fi
+if find "$ACMESH_PENDING_IMPORT_DIR" -maxdepth 1 -name '.archive-preview.*' -print -quit | grep -q .; then
+	echo "failed import_preview must remove validation sidecars"
+	exit 1
+fi
 if acmesh_migration_archive_validate "$symlink_archive" "$TMP/symlink-stage"; then
 	echo "migration archives containing symlinks must be rejected"
 	exit 1
@@ -204,6 +219,10 @@ export ACMESH_PENDING_IMPORT_DIR="$fresh_root/pending"
 mkdir "$ACMESH_PENDING_IMPORT_DIR"
 chmod 700 "$ACMESH_PENDING_IMPORT_DIR"
 ( umask 077; acmesh_migration_install_archive "$ssl_archive" )
+if find "$ACMESH_PENDING_IMPORT_DIR" -maxdepth 1 -name '.archive-apply.*' -print -quit | grep -q .; then
+	echo "successful install_archive must remove validation sidecars"
+	exit 1
+fi
 [ "$(mode "$fresh_root/etc")" = 755 ] || {
 	echo "fresh import should keep etc at 0755"
 	exit 1
