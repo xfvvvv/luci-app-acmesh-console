@@ -109,7 +109,7 @@ case "$preview" in
 		exit 1
 		;;
 esac
-if find "$ACMESH_PENDING_IMPORT_DIR" -maxdepth 1 -name '.archive-preview.*' -print -quit | grep -q .; then
+if find "$ACMESH_PENDING_IMPORT_DIR" -maxdepth 1 -name '.archive-preview.*' -print | grep -q .; then
 	echo "successful import_preview must remove validation sidecars"
 	exit 1
 fi
@@ -138,7 +138,7 @@ if acmesh_migration_import_preview "$invalid_request" >/dev/null 2>&1; then
 	echo "import_preview must reject archives containing symlinks"
 	exit 1
 fi
-if find "$ACMESH_PENDING_IMPORT_DIR" -maxdepth 1 -name '.archive-preview.*' -print -quit | grep -q .; then
+if find "$ACMESH_PENDING_IMPORT_DIR" -maxdepth 1 -name '.archive-preview.*' -print | grep -q .; then
 	echo "failed import_preview must remove validation sidecars"
 	exit 1
 fi
@@ -184,7 +184,20 @@ mkdir "$fake_root"
 tar -xzf "$archive" -C "$fake_root"
 
 mode() {
-	stat -c '%a' "$1"
+	[ -d "$1" ] || return 1
+	permissions="$(LC_ALL=C ls -ld "$1" | cut -c 2-10)"
+	[ "$(printf '%s' "$permissions" | wc -c | tr -d ' ')" = 9 ] || return 1
+	mode_digit() {
+		case "$1" in
+			---) printf '0' ;; --x) printf '1' ;; -w-) printf '2' ;; -wx) printf '3' ;;
+			r--) printf '4' ;; r-x) printf '5' ;; rw-) printf '6' ;; rwx) printf '7' ;;
+			*) return 1 ;;
+		esac
+	}
+	printf '%s%s%s\n' \
+		"$(mode_digit "$(printf '%s' "$permissions" | cut -c 1-3)")" \
+		"$(mode_digit "$(printf '%s' "$permissions" | cut -c 4-6)")" \
+		"$(mode_digit "$(printf '%s' "$permissions" | cut -c 7-9)")"
 }
 
 [ "$(mode "$fake_root/etc")" = 755 ] || {
@@ -219,7 +232,7 @@ export ACMESH_PENDING_IMPORT_DIR="$fresh_root/pending"
 mkdir "$ACMESH_PENDING_IMPORT_DIR"
 chmod 700 "$ACMESH_PENDING_IMPORT_DIR"
 ( umask 077; acmesh_migration_install_archive "$ssl_archive" )
-if find "$ACMESH_PENDING_IMPORT_DIR" -maxdepth 1 -name '.archive-apply.*' -print -quit | grep -q .; then
+if find "$ACMESH_PENDING_IMPORT_DIR" -maxdepth 1 -name '.archive-apply.*' -print | grep -q .; then
 	echo "successful install_archive must remove validation sidecars"
 	exit 1
 fi

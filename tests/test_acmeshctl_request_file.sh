@@ -20,12 +20,14 @@ if command -v node >/dev/null 2>&1; then
 #!/usr/bin/env node
 const fs = require('fs');
 const args = process.argv.slice(2);
-const input = args[args.indexOf('-i') + 1];
+const inputIndex = args.indexOf('-i');
+const input = inputIndex >= 0 ? args[inputIndex + 1] : '';
 const typeIndex = args.indexOf('-t');
 const valueIndex = args.indexOf('-e');
 const expr = args[(typeIndex >= 0 ? typeIndex : valueIndex) + 1];
 fs.appendFileSync(process.env.JSONFILTER_ARG_LOG, args.join(' ') + '\n');
-const data = JSON.parse(fs.readFileSync(input, 'utf8'));
+const raw = input ? fs.readFileSync(input, 'utf8') : fs.readFileSync(0, 'utf8');
+const data = JSON.parse(raw);
 const jsonType = (value) => {
 	if (value === null) return 'null';
 	if (Array.isArray(value)) return 'array';
@@ -33,20 +35,53 @@ const jsonType = (value) => {
 	if (typeof value === 'number') return 'double';
 	return typeof value;
 };
-if (typeIndex < 0 && expr === '@') {
-	process.stdout.write(JSON.stringify(data));
-	process.exit(0);
+const tokens = [];
+let offset = 0;
+if (expr !== '@') {
+	if (!expr || expr[0] !== '@') process.exit(2);
+	offset = 1;
+	while (offset < expr.length) {
+		if (expr[offset] === '.') {
+			const match = expr.slice(offset + 1).match(/^[A-Za-z0-9_:-]+/);
+			if (!match) process.exit(2);
+			tokens.push({ kind: 'key', value: match[0] });
+			offset += match[0].length + 1;
+		} else if (expr[offset] === '[') {
+			const rest = expr.slice(offset);
+			const wildcard = rest.match(/^\[\*\]/);
+			const index = rest.match(/^\[([0-9]+)\]/);
+			if (wildcard) {
+				tokens.push({ kind: 'wildcard' });
+				offset += wildcard[0].length;
+			} else if (index) {
+				tokens.push({ kind: 'index', value: Number(index[1]) });
+				offset += index[0].length;
+			} else {
+				process.exit(2);
+			}
+		} else {
+			process.exit(2);
+		}
+	}
 }
-const array = expr.match(/^@\.([A-Za-z0-9_]+)\[\*\]$/);
-const field = expr.match(/^@\.([A-Za-z0-9_]+)$/);
-let value = expr === '@' ? data : (array ? data[array[1]] : (field ? data[field[1]] : undefined));
+let values = [data];
+for (const token of tokens) {
+	const next = [];
+	for (const value of values) {
+		if (token.kind === 'key' && value !== null && typeof value === 'object' && !Array.isArray(value) && Object.prototype.hasOwnProperty.call(value, token.value)) {
+			next.push(value[token.value]);
+		} else if (token.kind === 'index' && Array.isArray(value) && token.value < value.length) {
+			next.push(value[token.value]);
+		} else if (token.kind === 'wildcard' && Array.isArray(value)) {
+			next.push(...value);
+		}
+	}
+	values = next;
+}
 if (typeIndex >= 0) {
-	if (value !== undefined) process.stdout.write(jsonType(value) + '\n');
-} else if (array) {
-	if (!Array.isArray(value)) process.exit(1);
-	process.stdout.write(value.map(String).join('\n'));
-} else if (value !== undefined && value !== null) {
-	process.stdout.write(typeof value === 'object' ? JSON.stringify(value) : String(value));
+	if (values.length > 0) process.stdout.write(jsonType(values[0]) + '\n');
+} else if (values.length > 0) {
+	process.stdout.write(values.map((value) => typeof value === 'object' ? JSON.stringify(value) : String(value)).join('\n'));
 }
 JS
 	chmod +x "$BIN/jsonfilter"
@@ -149,8 +184,12 @@ printf '%s\n' '{"domain":"request-dns.example","dnsApi":"dns_cf","credentials":[
 dns_out="$(sh "$CTL" dns-test --request-file "$dns_request")"
 case "$dns_out" in *'"ok":true'*'"testMode":true'*'"taskId"'*) ;; *) echo "request-file dns-test failed"; echo "$dns_out"; exit 1 ;; esac
 dns_id="$(printf '%s' "$dns_out" | sed -n 's/.*"taskId":"\([^"]*\)".*/\1/p')"
-sleep 1
-dns_log="$(sh "$CTL" task-log --task-id "$dns_id")"
+dns_log=""
+for _dns_wait in 1 2 3 4 5 6 7 8 9 10; do
+	dns_log="$(sh "$CTL" task-log --task-id "$dns_id")"
+	case "$dns_log" in *'Domain: request-dns.example'*'Provider: dns_cf'*'CF_Token=***'*) break ;; esac
+	sleep 1
+done
 case "$dns_log" in *'Domain: request-dns.example'*'Provider: dns_cf'*'CF_Token=***'*) ;; *) echo "request-file dns-test ignored fields"; echo "$dns_log"; exit 1 ;; esac
 case "$dns_log" in *'dns-secret-token'*) echo "request-file dns-test leaked credential"; exit 1 ;; esac
 

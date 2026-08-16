@@ -227,7 +227,8 @@ acmesh_migration_archive_stage_cleanup() (
 acmesh_migration_prepare_destination_parent() {
 	destination="$1"
 	destination_parent_path=$(dirname "$destination")
-	mkdir -p -m 755 "$destination_parent_path"
+	mkdir -p "$destination_parent_path" || return 1
+	chmod 755 "$destination_parent_path" || return 1
 }
 
 acmesh_migration_prepare_destination_root() {
@@ -242,9 +243,11 @@ acmesh_migration_prepare_destination_root() {
 			mkdir -p -m 700 "$ACMESH_MIGRATION_CONSOLE_ROOT" || return 1
 			;;
 		etc/config/*)
+			acmesh_migration_prepare_destination_parent "$ACMESH_MIGRATION_ACME_ROOT" || return 1
 			acmesh_migration_prepare_destination_parent "$ACMESH_MIGRATION_UCI_CONFIG" || return 1
 			;;
 		etc/ssl/*)
+			acmesh_migration_prepare_destination_parent "$ACMESH_MIGRATION_ACME_ROOT" || return 1
 			acmesh_migration_prepare_destination_parent "$ACMESH_MIGRATION_SSL_ROOT" || return 1
 			mkdir -p -m 755 "$ACMESH_MIGRATION_SSL_ROOT" || return 1
 			;;
