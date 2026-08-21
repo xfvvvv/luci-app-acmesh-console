@@ -72,6 +72,20 @@ matrix_start core-upgrade global core
 matrix_start ssh-key-convert sshKey deploy-ssh
 [ ! -e "$TMP/tasks/state" ] && [ ! -e "$TMP/tasks/log" ]
 
+# Preparation probes may return a structured prerequisite response while
+# failing with a non-zero status.  The operation boundary must forward that
+# response as the sole JSON document instead of appending a generic failure.
+acmesh_ssh_verify_pinned_host() {
+	printf '%s\n' '{"ok":false,"error":"hostKeyRequired","algorithm":"ssh-ed25519","fingerprint":"SHA256:fixture"}'
+	return 4
+}
+set +e; host_key_response="$(acmesh_operation_start deploy-run deployProfile deploy-ssh '')"; host_key_rc=$?; set -e
+[ "$host_key_rc" = 4 ]
+[ "$(printf '%s' "$host_key_response" | jsonfilter -e '@.error')" = hostKeyRequired ]
+[ "$(printf '%s' "$host_key_response" | jsonfilter -e '@.fingerprint')" = SHA256:fixture ]
+[ "$(printf '%s\n' "$host_key_response" | awk 'NF { count++ } END { print count + 0 }')" = 1 ]
+unset -f acmesh_ssh_verify_pinned_host
+
 # Renew performs a final identity check while holding its certificate lock.
 # A business-intent change after authorization must fail before acme.sh runs.
 mkdir -p "$TMP/renew-final"; chmod 700 "$TMP/renew-final"

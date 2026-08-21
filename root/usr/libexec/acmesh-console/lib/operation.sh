@@ -387,7 +387,13 @@ acmesh_operation_start() {
 	ACMESH_AUTH_RECOMPUTE_CALLBACK=acmesh_operation_recompute ACMESH_AUTH_ADMIT_CALLBACK=acmesh_operation_admit
 	ACMESH_AUTH_REQUIRE_REMEMBERED="${ACMESH_OPERATION_REQUIRE_REMEMBERED:-0}"
 	export ACMESH_AUTH_RECOMPUTE_CALLBACK ACMESH_AUTH_ADMIT_CALLBACK ACMESH_AUTH_REQUIRE_REMEMBERED
-	recompute_rc=0; acmesh_operation_recompute "$op_start_operation" "$op_start_subject_type" "$op_start_subject_id" "$op_start_tmp/snapshot" "$op_start_tmp/summary" || recompute_rc=$?
+	recompute_response="$op_start_tmp/recompute-response"
+	recompute_rc=0
+	# Some preparation probes (notably SSH host-key verification) return a
+	# structured response on stdout while also using a non-zero status to stop
+	# the operation.  Capture that response so the RPC emits exactly one JSON
+	# document instead of appending the generic preparation failure to it.
+	acmesh_operation_recompute "$op_start_operation" "$op_start_subject_type" "$op_start_subject_id" "$op_start_tmp/snapshot" "$op_start_tmp/summary" > "$recompute_response" || recompute_rc=$?
 	if [ "$recompute_rc" = 6 ]; then
 		conversion_subject="${ACMESH_OPERATION_CONVERSION_SUBJECT:-$op_start_subject_id}"
 		acmesh_operation_save_conversion_continuation "$op_start_operation" "$op_start_subject_id" "$conversion_subject" || { rm -rf "$op_start_tmp"; trap - HUP INT TERM EXIT; return 1; }
@@ -395,11 +401,16 @@ acmesh_operation_start() {
 		acmesh_operation_start ssh-key-convert sshKey "${ACMESH_OPERATION_CONVERSION_SUBJECT:-$op_start_subject_id}" "$op_start_parameters_file"; return $?
 	fi
 	if [ "$recompute_rc" != 0 ]; then
-		case "$op_start_operation" in
-			import-apply) op_start_error='migration restore preparation failed' ;;
-			*) op_start_error='operation preparation failed' ;;
-		esac
-		acmesh_operation_emit_failure "$op_start_operation" "$recompute_rc" "$op_start_error"
+		recompute_response_lines="$(awk 'NF { count++ } END { print count + 0 }' "$recompute_response")"
+		if [ "$recompute_response_lines" = 1 ] && [ "$(jsonfilter -i "$recompute_response" -t '@' 2>/dev/null || true)" = object ]; then
+			cat "$recompute_response"
+		else
+			case "$op_start_operation" in
+				import-apply) op_start_error='migration restore preparation failed' ;;
+				*) op_start_error='operation preparation failed' ;;
+			esac
+			acmesh_operation_emit_failure "$op_start_operation" "$recompute_rc" "$op_start_error"
+		fi
 		rm -rf "$op_start_tmp"; trap - HUP INT TERM EXIT
 		return "$recompute_rc"
 	fi
