@@ -55,7 +55,7 @@ printf '{"archiveBase64":"%s"}\n' "$archive_b64" > "$TMP/import.json"
 preview="$(sh "$CTL" import-preview --request-file "$TMP/import.json")"
 preview_id="$(printf '%s' "$preview" | jsonfilter -e '@.previewId')"
 [ -f "$TMP/pending/$preview_id.tar.gz" ]
-printf 'changed\n' > "$ACMESH_CONSOLE_CONFIG"
+printf '%s\n' '{"schemaVersion":2,"global":{"defaultAccountEmail":"changed@example.org","coreTag":"v3.1.4","acmeHome":"/etc/acme"},"accountProfiles":[],"issueProfiles":[],"deployProfiles":[]}' > "$ACMESH_CONSOLE_CONFIG"
 printf 'changed-key\n' > "$TMP/etc/ssl/example.key"
 printf '{"previewId":"%s"}\n' "$preview_id" > "$TMP/apply.json"
 set +e; challenge="$(sh "$CTL" import-apply --request-file "$TMP/apply.json")"; rc=$?; set -e
@@ -71,8 +71,8 @@ grep -F 'private-key' "$TMP/etc/ssl/example.key" >/dev/null
 printf '{"archiveBase64":"%s"}\n' "$archive_b64" > "$TMP/failing-import.json"
 failed_preview="$(sh "$CTL" import-preview --request-file "$TMP/failing-import.json")"
 failed_preview_id="$(printf '%s' "$failed_preview" | jsonfilter -e '@.previewId')"
-rm "$TMP/etc/acme/account.conf"
-mkdir "$TMP/etc/acme/account.conf"
+rm "$TMP/etc/ssl/example.key"
+mkdir "$TMP/etc/ssl/example.key"
 printf '{"previewId":"%s"}\n' "$failed_preview_id" > "$TMP/failing-apply.json"
 set +e; failed_challenge="$(sh "$CTL" import-apply --request-file "$TMP/failing-apply.json")"; failed_apply_rc=$?; set -e
 [ "$failed_apply_rc" = 3 ]

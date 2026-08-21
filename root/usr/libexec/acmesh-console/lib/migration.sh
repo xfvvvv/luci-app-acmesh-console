@@ -266,7 +266,10 @@ acmesh_migration_archive_candidate() {
 	archive="$1" output="$2"; parent=$(dirname "$output"); tmp="$parent/.archive-candidate.$$.$(date +%s)"
 	stage="$tmp/stage"
 	trap 'rm -rf "$tmp"; acmesh_migration_archive_stage_cleanup "$stage" || true' HUP INT TERM EXIT
-	mkdir -p "$tmp/stage" || return 1
+	mkdir "$tmp" || return 1
+	chmod 700 "$tmp" || return 1
+	mkdir "$tmp/stage" || return 1
+	chmod 700 "$tmp/stage" || return 1
 	acmesh_migration_archive_validate "$archive" "$tmp/stage" || return 1
 	cat "$tmp/stage/etc/acmesh-console/config.json" | acmesh_atomic_write "$output" 600 || return 1
 	rm -rf "$tmp"; acmesh_migration_archive_stage_cleanup "$stage"; trap - HUP INT TERM EXIT

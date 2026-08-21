@@ -394,7 +394,15 @@ acmesh_operation_start() {
 		rm -rf "$op_start_tmp"; trap - HUP INT TERM EXIT
 		acmesh_operation_start ssh-key-convert sshKey "${ACMESH_OPERATION_CONVERSION_SUBJECT:-$op_start_subject_id}" "$op_start_parameters_file"; return $?
 	fi
-	[ "$recompute_rc" = 0 ] || return "$recompute_rc"
+	if [ "$recompute_rc" != 0 ]; then
+		case "$op_start_operation" in
+			import-apply) op_start_error='migration restore preparation failed' ;;
+			*) op_start_error='operation preparation failed' ;;
+		esac
+		acmesh_operation_emit_failure "$op_start_operation" "$recompute_rc" "$op_start_error"
+		rm -rf "$op_start_tmp"; trap - HUP INT TERM EXIT
+		return "$recompute_rc"
+	fi
 	rc=0; umask 077; acmesh_auth_prepare "$op_start_operation" "$op_start_subject_type" "$op_start_subject_id" "$op_start_tmp/snapshot" "$op_start_tmp/summary" > "$op_start_tmp/response" || rc=$?; chmod 600 "$op_start_tmp/response" 2>/dev/null || true
 	if [ "$rc" = 0 ]; then case "$op_start_operation" in import-apply|secret-export|profile-delete) acmesh_operation_direct_dispatch "$op_start_operation" "$op_start_subject_id" > "$op_start_tmp/response" || rc=$?;; esac; fi
 	if [ ! -s "$op_start_tmp/response" ] && [ ! -s "$op_start_tmp/result" ]; then
