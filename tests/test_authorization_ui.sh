@@ -37,7 +37,8 @@ require "$OPS" "'authorization_revoke_all'"
 require "$OPS" "authorization.run('profile_delete'"
 require "$OPS" 'const issueHostKeyOptions = deployAfterIssue && deploy && (deploy.type || '\''local'\'') === '\''ssh'\'''
 require "$OPS" "const operation = deployAfterIssue ? 'issue-deploy' : 'issue';"
-require "$OPS" "authorization.run(operation, { profileId: profile.id }, issueHostKeyOptions)"
+require "$OPS" "const rpcMethod = deployAfterIssue ? 'issue_deploy' : operation;"
+require "$OPS" "authorization.run(rpcMethod, { profileId: profile.id }, issueHostKeyOptions)"
 for key in domains challengeAlias dnsSleep ec256 ec384 ec521 rsa2048 rsa3072 rsa4096 rsa8192; do require "$OPS" "$key"; done
 require "$CERTS" "authorization.run('renew'"
 require "$CERTS" "'certificate_revoke'"

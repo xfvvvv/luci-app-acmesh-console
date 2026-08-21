@@ -1112,7 +1112,8 @@ return view.extend({
 				port: deploy.port || 22
 			} : {};
 			const operation = deployAfterIssue ? 'issue-deploy' : 'issue';
-			return authorization.run(operation, { profileId: profile.id }, issueHostKeyOptions).then(function(res) {
+			const rpcMethod = deployAfterIssue ? 'issue_deploy' : operation;
+			return authorization.run(rpcMethod, { profileId: profile.id }, issueHostKeyOptions).then(function(res) {
 				if (!res.taskId) {
 					output.textContent = res.error || _('Unable to create task');
 					return null;

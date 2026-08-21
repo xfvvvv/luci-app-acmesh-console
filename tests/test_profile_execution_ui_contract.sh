@@ -9,7 +9,8 @@ require() { grep -Fq -- "$2" "$1" || { echo "missing execution contract: $2"; ex
 
 require "$OPS" "const runIssueProfile = function(profile, deployAfterIssue)"
 require "$OPS" "const operation = deployAfterIssue ? 'issue-deploy' : 'issue';"
-require "$OPS" "authorization.run(operation, { profileId: profile.id }, issueHostKeyOptions)"
+require "$OPS" "const rpcMethod = deployAfterIssue ? 'issue_deploy' : operation;"
+require "$OPS" "authorization.run(rpcMethod, { profileId: profile.id }, issueHostKeyOptions)"
 require "$OPS" "return runIssueProfile(profile, false);"
 require "$OPS" "return runIssueProfile(profile, true);"
 require "$OPS" "}, _('Issue'))"
