@@ -314,7 +314,14 @@ acmesh_operation_admit() {
 acmesh_operation_direct_dispatch() {
 	operation="$1" subject_id="$2"
 	case "$operation" in
-		import-apply) acmesh_config_apply_pending "$subject_id" || return 1; printf '{"ok":true,"authorized":true,"applied":true,"configDigest":"%s"}\n' "$subject_id" ;;
+		import-apply)
+			acmesh_config_apply_pending "$subject_id" || {
+				operation_rc=$?
+				acmesh_operation_emit_failure "$operation" "$operation_rc" 'migration restore failed'
+				return "$operation_rc"
+			}
+			printf '{"ok":true,"authorized":true,"applied":true,"configDigest":"%s"}\n' "$subject_id"
+			;;
 		secret-export) acmesh_migration_archive_response "$ACMESH_AUTH_EXPORT_CERTS" "$ACMESH_AUTH_CONFIG_DIGEST" ;;
 		profile-delete)
 			case "$subject_id" in account.*) profile_kind=account; profile_id="${subject_id#account.}";; issue.*) profile_kind=issue; profile_id="${subject_id#issue.}";; deploy.*) profile_kind=deploy; profile_id="${subject_id#deploy.}";; *) return 2;; esac
@@ -322,6 +329,12 @@ acmesh_operation_direct_dispatch() {
 			;;
 		*) return 2;;
 	esac
+}
+
+acmesh_operation_emit_failure() {
+	operation_name="$1" operation_rc="$2" error_message="${3:-operation execution failed}"
+	printf '{"ok":false,"error":"%s","operation":"%s","exitCode":%s}\n' \
+		"$(acmesh_json_escape "$error_message")" "$(acmesh_json_escape "$operation_name")" "$operation_rc"
 }
 
 acmesh_operation_run_renew() {
@@ -384,6 +397,9 @@ acmesh_operation_start() {
 	[ "$recompute_rc" = 0 ] || return "$recompute_rc"
 	rc=0; umask 077; acmesh_auth_prepare "$op_start_operation" "$op_start_subject_type" "$op_start_subject_id" "$op_start_tmp/snapshot" "$op_start_tmp/summary" > "$op_start_tmp/response" || rc=$?; chmod 600 "$op_start_tmp/response" 2>/dev/null || true
 	if [ "$rc" = 0 ]; then case "$op_start_operation" in import-apply|secret-export|profile-delete) acmesh_operation_direct_dispatch "$op_start_operation" "$op_start_subject_id" > "$op_start_tmp/response" || rc=$?;; esac; fi
+	if [ ! -s "$op_start_tmp/response" ] && [ ! -s "$op_start_tmp/result" ]; then
+		acmesh_operation_emit_failure "$op_start_operation" "$rc" > "$op_start_tmp/response"
+	fi
 	if [ "$rc" = 0 ] && [ -f "$op_start_tmp/result" ]; then cat "$op_start_tmp/result"; else cat "$op_start_tmp/response"; fi
 	rm -rf "$op_start_tmp"; trap - HUP INT TERM EXIT
 	return "$rc"
@@ -400,6 +416,9 @@ acmesh_operation_execute_challenge() {
 	export ACMESH_AUTH_RECOMPUTE_CALLBACK ACMESH_AUTH_ADMIT_CALLBACK
 	rc=0; umask 077; acmesh_auth_execute "$challenge_id" "$decision" > "$op_execute_tmp/response" || rc=$?; chmod 600 "$op_execute_tmp/response" 2>/dev/null || true
 	if [ "$rc" = 0 ]; then case "${ACMESH_AUTH_EXECUTED_OPERATION:-}" in import-apply|secret-export|profile-delete) acmesh_operation_direct_dispatch "$ACMESH_AUTH_EXECUTED_OPERATION" "$ACMESH_AUTH_EXECUTED_SUBJECT_ID" > "$op_execute_tmp/response" || rc=$?;; esac; fi
+	if [ ! -s "$op_execute_tmp/response" ] && [ ! -s "$op_execute_tmp/result" ]; then
+		acmesh_operation_emit_failure "${ACMESH_AUTH_EXECUTED_OPERATION:-authorization-execute}" "$rc" > "$op_execute_tmp/response"
+	fi
 	if [ "$rc" = 0 ] && [ "${ACMESH_AUTH_EXECUTED_OPERATION:-}" = ssh-key-convert ]; then
 		continuation="$(acmesh_operation_take_conversion_continuation "$ACMESH_AUTH_EXECUTED_SUBJECT_ID" 2>/dev/null || true)"
 		if [ -n "$continuation" ]; then

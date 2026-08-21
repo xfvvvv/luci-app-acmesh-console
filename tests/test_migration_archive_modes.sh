@@ -15,9 +15,10 @@ printf '%s\n' '{"schemaVersion":2,"global":{},"accountProfiles":[],"issueProfile
 printf '%s\n' account-state > "$TMP/source/etc/acme/account/state"
 printf '%s\n' console-state > "$TMP/source/etc/acmesh-console/state"
 printf '%s\n' config-lock-state > "$TMP/source/etc/acmesh-console/config.lock"
+printf '%s\n' known-hosts-lock-state > "$TMP/source/etc/acmesh-console/ssh/known_hosts.lock"
 printf '%s\n' uci-state > "$TMP/source/etc/config/acmesh-console"
 printf '%s\n' certificate-key > "$TMP/source/etc/ssl/example.key"
-chmod 600 "$TMP/source/etc/acmesh-console/config.json" "$TMP/source/etc/acme/account/state" "$TMP/source/etc/acmesh-console/state" "$TMP/source/etc/acmesh-console/config.lock" "$TMP/source/etc/config/acmesh-console"
+chmod 600 "$TMP/source/etc/acmesh-console/config.json" "$TMP/source/etc/acme/account/state" "$TMP/source/etc/acmesh-console/state" "$TMP/source/etc/acmesh-console/config.lock" "$TMP/source/etc/acmesh-console/ssh/known_hosts.lock" "$TMP/source/etc/config/acmesh-console"
 chmod 600 "$TMP/source/etc/ssl/example.key"
 
 export ACMESH_LIB_DIR="$ROOT/root/usr/libexec/acmesh-console/lib"
@@ -80,6 +81,10 @@ jsonfilter() {
 
 archive="$TMP/archive.tar.gz"
 ( acmesh_migration_build_archive false "$archive" )
+if tar -tzf "$archive" | grep -F 'etc/acmesh-console/ssh/known_hosts.lock' >/dev/null; then
+	echo "migration archives must exclude the SSH known-hosts lock"
+	exit 1
+fi
 if tar -tzf "$archive" | grep -F 'etc/acmesh-console/config.lock' >/dev/null; then
 	echo "migration archives must exclude the runtime config lock"
 	exit 1
@@ -182,6 +187,28 @@ grep -F '"skippedDeploymentFiles":0' "$ssl_root/acmesh-console-backup.json" >/de
 fake_root="$TMP/fake-root"
 mkdir "$fake_root"
 tar -xzf "$archive" -C "$fake_root"
+
+legacy_source_root="$TMP/legacy-source-root"
+mkdir "$legacy_source_root"
+tar -xzf "$TMP/archive.tar.gz" -C "$legacy_source_root"
+printf '%s\n' legacy-known-hosts-lock > "$legacy_source_root/etc/acmesh-console/ssh/known_hosts.lock"
+legacy_archive="$TMP/archive-legacy-lock.tar.gz"
+tar -czf "$legacy_archive" -C "$legacy_source_root" acmesh-console-backup.json etc
+legacy_root="$TMP/legacy-root"
+mkdir -p "$legacy_root/etc/config"
+chmod 700 "$legacy_root"
+export ACMESH_MIGRATION_ACME_ROOT="$legacy_root/etc/acme"
+export ACMESH_MIGRATION_CONSOLE_ROOT="$legacy_root/etc/acmesh-console"
+export ACMESH_MIGRATION_SSL_ROOT="$legacy_root/etc/ssl"
+export ACMESH_MIGRATION_UCI_CONFIG="$legacy_root/etc/config/acmesh-console"
+export ACMESH_PENDING_IMPORT_DIR="$legacy_root/pending"
+mkdir "$ACMESH_PENDING_IMPORT_DIR"
+chmod 700 "$ACMESH_PENDING_IMPORT_DIR"
+( umask 077; acmesh_migration_install_archive "$legacy_archive" )
+[ ! -e "$legacy_root/etc/acmesh-console/ssh/known_hosts.lock" ] || {
+	echo "legacy migration restore must not install the SSH known-hosts lock"
+	exit 1
+}
 
 mode() {
 	[ -d "$1" ] || return 1

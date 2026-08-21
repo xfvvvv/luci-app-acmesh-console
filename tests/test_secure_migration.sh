@@ -68,6 +68,23 @@ grep -F 'ops@example.org' "$ACMESH_CONSOLE_CONFIG" >/dev/null
 grep -F 'private-key' "$TMP/etc/ssl/example.key" >/dev/null
 [ ! -e "$TMP/pending/$preview_id.tar.gz" ]
 
+printf '{"archiveBase64":"%s"}\n' "$archive_b64" > "$TMP/failing-import.json"
+failed_preview="$(sh "$CTL" import-preview --request-file "$TMP/failing-import.json")"
+failed_preview_id="$(printf '%s' "$failed_preview" | jsonfilter -e '@.previewId')"
+rm "$TMP/etc/acme/account.conf"
+mkdir "$TMP/etc/acme/account.conf"
+printf '{"previewId":"%s"}\n' "$failed_preview_id" > "$TMP/failing-apply.json"
+set +e; failed_challenge="$(sh "$CTL" import-apply --request-file "$TMP/failing-apply.json")"; failed_apply_rc=$?; set -e
+[ "$failed_apply_rc" = 3 ]
+failed_challenge_id="$(printf '%s' "$failed_challenge" | jsonfilter -e '@.challengeId')"
+printf '{"challengeId":"%s","decision":"once"}\n' "$failed_challenge_id" > "$TMP/failing-execute.json"
+set +e; failed_output="$(sh "$CTL" authorization-execute --request-file "$TMP/failing-execute.json")"; failed_execute_rc=$?; set -e
+[ "$failed_execute_rc" = 1 ]
+case "$failed_output" in
+	*'"ok":false'*'"error":"migration restore failed"'*) ;;
+	*) echo "failed migration restore must return structured backend error"; echo "$failed_output"; exit 1 ;;
+esac
+
 printf '%s\n' '{"scope":"config-with-secrets"}' > "$TMP/legacy-export.json"
 if sh "$CTL" secret-export --request-file "$TMP/legacy-export.json" >/dev/null 2>&1; then
 	echo "legacy JSON export scope was accepted"

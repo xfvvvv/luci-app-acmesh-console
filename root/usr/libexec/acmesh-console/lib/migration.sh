@@ -54,6 +54,15 @@ acmesh_migration_safe_file() (
 	[ "$safe_file_size" -le "$ACMESH_MIGRATION_MAX_FILE_BYTES" ]
 )
 
+acmesh_migration_is_runtime_state() {
+	case "$1" in
+		etc/acmesh-console/instance-id|etc/acmesh-console/authorization.lock|etc/acmesh-console/authorizations.json|etc/acmesh-console/authorizations.json.*|etc/acmesh-console/config.lock|etc/acmesh-console/ssh/known_hosts|etc/acmesh-console/ssh/known_hosts.lock)
+			return 0
+			;;
+		*) return 1 ;;
+	esac
+}
+
 acmesh_migration_copy_tree() {
 	source="$1" relroot="$2" stage="$3"
 	[ -d "$source" ] && [ ! -L "$source" ] || return 0
@@ -67,9 +76,7 @@ acmesh_migration_copy_tree() {
 		rel="${path#"$source"/}"
 		[ "$rel" != "$path" ] || exit 1
 		acmesh_migration_safe_relative "$rel" || exit 1
-		case "$relroot/$rel" in
-			etc/acmesh-console/instance-id|etc/acmesh-console/authorization.lock|etc/acmesh-console/authorizations.json|etc/acmesh-console/authorizations.json.*|etc/acmesh-console/config.lock|etc/acmesh-console/ssh/known_hosts) continue ;;
-		esac
+		acmesh_migration_is_runtime_state "$relroot/$rel" && continue
 		cp -p "$path" "$stage/$relroot/$rel" || exit 1
 	done || return 1
 }
@@ -288,7 +295,9 @@ acmesh_migration_install_archive() {
 	trap 'rm -rf "$parent"; acmesh_migration_archive_stage_cleanup "$stage" || true' HUP INT TERM EXIT
 	mkdir -p "$stage" "$rollback" || return 1
 	acmesh_migration_archive_validate "$archive" "$stage" || return 1
-	find "$stage/etc" -type f -print | sed "s#^$stage/##" > "$touched" || return 1
+	find "$stage/etc" -type f -print | sed "s#^$stage/##" | while IFS= read -r rel; do
+		acmesh_migration_is_runtime_state "$rel" || printf '%s\n' "$rel"
+	done > "$touched" || return 1
 	: > "$existing"
 	while IFS= read -r rel; do
 		dest=$(acmesh_migration_map_path "/$rel") || return 1
