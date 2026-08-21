@@ -1283,3 +1283,6 @@ msgstr "既定のグループ"
 
 msgid "key 0600 / fullchain 0644"
 msgstr "秘密鍵 0600 / フルチェーン 0644"
+
+msgid "One-time sudo password (leave blank for passwordless sudo)"
+msgstr "一度限りの sudo パスワード（パスワードなし sudo の場合は空欄）"

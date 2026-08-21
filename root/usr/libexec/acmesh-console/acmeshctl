@@ -148,7 +148,7 @@ acmesh_run_issue_profile() (
 
 acmesh_run_issue_deploy_profile() (
 	issue_profile_id="$1" issue_resolved_file="$2" deploy_resolved_file="$3" profile_home="$4"
-	cleanup_resolved() { rm -f -- "$issue_resolved_file" "$deploy_resolved_file"; }
+	cleanup_resolved() { rm -f -- "$issue_resolved_file" "$deploy_resolved_file" "${ACMESH_DEPLOY_SUDO_PASSWORD_FILE:-}"; }
 	trap cleanup_resolved EXIT
 	trap 'cleanup_resolved; exit 129' HUP
 	trap 'cleanup_resolved; exit 130' INT

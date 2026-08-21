@@ -1283,3 +1283,6 @@ msgstr "기본 그룹"
 
 msgid "key 0600 / fullchain 0644"
 msgstr "개인 키 0600 / 전체 체인 0644"
+
+msgid "One-time sudo password (leave blank for passwordless sudo)"
+msgstr "일회성 sudo 비밀번호(비밀번호 없는 sudo는 비워 둠)"

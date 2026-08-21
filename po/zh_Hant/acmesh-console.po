@@ -1283,3 +1283,6 @@ msgstr "預設群組"
 
 msgid "key 0600 / fullchain 0644"
 msgstr "私鑰 0600 / 憑證鏈 0644"
+
+msgid "One-time sudo password (leave blank for passwordless sudo)"
+msgstr "一次性 sudo 密碼（使用免密 sudo 時留空）"

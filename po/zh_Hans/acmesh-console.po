@@ -1283,3 +1283,6 @@ msgstr "默认组"
 
 msgid "key 0600 / fullchain 0644"
 msgstr "私钥 0600 / 证书链 0644"
+
+msgid "One-time sudo password (leave blank for passwordless sudo)"
+msgstr "一次性 sudo 密码（使用免密 sudo 时留空）"

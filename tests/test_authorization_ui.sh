@@ -17,6 +17,9 @@ require "$AUTH" "'authorization_execute'"
 require "$AUTH" "'once'"
 require "$AUTH" "'remember'"
 require "$AUTH" 'response.riskSummary'
+require "$AUTH" 'sudoPasswordRequired'
+require "$AUTH" 'sudoPassword'
+require "$AUTH" "'type': 'password'"
 require "$AUTH" "response.error === 'hostKeyChanged'"
 require "$AUTH" "probed.ok || (!probed.challengeId"
 require "$AUTH" "!probed.challengeId"

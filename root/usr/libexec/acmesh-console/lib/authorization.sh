@@ -111,6 +111,9 @@ acmesh_auth_emit_issue() {
 	acmesh_auth_emit_optional listenPort "${ACMESH_AUTH_LISTEN_PORT-}" || return $?
 	acmesh_auth_emit_optional deployProfileId "${ACMESH_AUTH_DEPLOY_PROFILE_ID-}" || return $?
 	acmesh_auth_emit_optional deployFingerprint "${ACMESH_AUTH_DEPLOY_FINGERPRINT-}" || return $?
+	if [ "${ACMESH_AUTH_DEPLOY_SUDO_PASSWORD_REQUIRED:-false}" = true ]; then
+		acmesh_canon_bool deploySudoPasswordRequired true || return $?
+	fi
 	acmesh_canon_bool testMode "${ACMESH_AUTH_TEST_MODE:-false}" || return $?
 }
 
@@ -145,6 +148,9 @@ acmesh_auth_emit_deploy() {
 	preserve_metadata="${ACMESH_AUTH_PRESERVE_METADATA-${ACMESH_DEPLOY_PRESERVE_METADATA-}}"
 	if [ -n "$preserve_metadata" ]; then
 		acmesh_canon_bool preserveMetadata "$preserve_metadata" || return $?
+	fi
+	if [ "${ACMESH_AUTH_SUDO_PASSWORD_REQUIRED:-false}" = true ]; then
+		acmesh_canon_bool sudoPasswordRequired true || return $?
 	fi
 	acmesh_canon_string transactionStrategy "${ACMESH_AUTH_TRANSACTION_STRATEGY:-pair-rollback-v1}" || return $?
 }
@@ -274,6 +280,12 @@ acmesh_auth_operation_supported() {
 		*) return 1 ;;
 	esac
 }
+
+acmesh_auth_requires_sudo_password() {
+	[ "${ACMESH_AUTH_SUDO_PASSWORD_REQUIRED:-false}" = true ] ||
+		[ "${ACMESH_AUTH_DEPLOY_SUDO_PASSWORD_REQUIRED:-false}" = true ]
+}
+
 acmesh_auth_lock_run() {
 	acmesh_path_dir "$ACMESH_AUTH_LOCK_FILE"
 	acmesh_private_dir "$dir" || return 1
@@ -487,15 +499,25 @@ acmesh_auth_execute_locked() {
 	[ -f "$path" ] && [ ! -L "$path" ] && acmesh_private_file_is_secure "$path" || { printf '{"ok":false,"error":"authorizationConsumedOrMissing"}\n'; return 4; }
 	mv "$path" "$consuming" || return 1
 	cleanup_consuming() { [ -z "${tmpdir:-}" ] || rm -rf "$tmpdir"; rm -f "$consuming"; acmesh_auth_lock_release; trap - HUP INT TERM EXIT; }
+	cleanup_on_signal() {
+		auth_abort_callback="${ACMESH_AUTH_ABORT_CLEANUP_CALLBACK:-}"
+		if [ -n "$auth_abort_callback" ] && command -v "$auth_abort_callback" >/dev/null 2>&1; then
+			"$auth_abort_callback" || true
+		fi
+		cleanup_consuming
+	}
 	trap 'cleanup_consuming' EXIT
-	trap 'cleanup_consuming; exit 129' HUP
-	trap 'cleanup_consuming; exit 130' INT
-	trap 'cleanup_consuming; exit 143' TERM
+	trap 'cleanup_on_signal; exit 129' HUP
+	trap 'cleanup_on_signal; exit 130' INT
+	trap 'cleanup_on_signal; exit 143' TERM
 	instance_id="$(acmesh_auth_instance_id)" || { cleanup_consuming; return 1; }
 	[ "$(acmesh_auth_json_type "$consuming" '@')" = object ] && [ "$(acmesh_auth_json_get "$consuming" '@.schemaVersion')" = "$ACMESH_AUTH_LEDGER_SCHEMA" ] && [ "$(acmesh_auth_json_get "$consuming" '@.instanceId')" = "$instance_id" ] && [ "$(acmesh_auth_json_get "$consuming" '@.ackVersion')" = "$ACMESH_AUTH_ACK_VERSION" ] && [ "$(acmesh_auth_json_get "$consuming" '@.challengeId')" = "$id" ] || { cleanup_consuming; return 4; }
 	expires="$(acmesh_auth_json_get "$consuming" '@.expiresAt')"; case "$expires" in ''|*[!0-9]*) cleanup_consuming; return 4 ;; esac
 	[ "$now" -lt "$expires" ] || { rm -f "$consuming"; trap - HUP INT TERM EXIT; printf '{"ok":false,"error":"authorizationExpired"}\n'; return 4; }
 	operation="$(acmesh_auth_json_get "$consuming" '@.operation')"; subject_type="$(acmesh_auth_json_get "$consuming" '@.subjectType')"; subject_id="$(acmesh_auth_json_get "$consuming" '@.subjectId')"
+	if [ "$decision" = remember ] && [ -n "${ACMESH_OPERATION_SUDO_PASSWORD_FILE:-}" ]; then
+		rm -f "$consuming"; trap - HUP INT TERM EXIT; printf '{"ok":false,"error":"rememberNotAllowed"}\n'; return 2
+	fi
 	case "$operation:$decision" in import-apply:remember|certificate-revoke:remember|certificate-remove:remember|profile-delete:remember) rm -f "$consuming"; trap - HUP INT TERM EXIT; printf '{"ok":false,"error":"rememberNotAllowed"}\n'; return 2;; esac
 	ACMESH_AUTH_EXECUTED_OPERATION="$operation" ACMESH_AUTH_EXECUTED_SUBJECT_TYPE="$subject_type" ACMESH_AUTH_EXECUTED_SUBJECT_ID="$subject_id"
 	export ACMESH_AUTH_EXECUTED_OPERATION ACMESH_AUTH_EXECUTED_SUBJECT_TYPE ACMESH_AUTH_EXECUTED_SUBJECT_ID
@@ -510,6 +532,9 @@ acmesh_auth_execute_locked() {
 		rc=0
 		acmesh_auth_create_challenge_locked "$operation" "$subject_type" "$subject_id" "$snapshot" "$summary" "$now" true || rc=$?
 		rm -rf "$tmpdir"; [ "$rc" = 3 ]; return 5
+	fi
+	if [ -n "${ACMESH_OPERATION_SUDO_PASSWORD_FILE:-}" ] && ! acmesh_auth_requires_sudo_password; then
+		rm -f "$consuming"; trap - HUP INT TERM EXIT; printf '{"ok":false,"error":"sudoPasswordNotExpected"}\n'; return 2
 	fi
 	load_rc=0; acmesh_auth_ledger_load_locked || load_rc=$?; [ "$load_rc" = 0 ] || { cleanup_consuming; return 1; }
 	if [ "$decision" = remember ] && ! acmesh_auth_rewrite_locked upsert '' "$operation" "$subject_type" "$subject_id" "$current" "$now"; then cleanup_consuming; return 1; fi

@@ -285,6 +285,17 @@ acmesh_task_write_state() {
 	acmesh_task_write_state_atomic "$id" "$operation" "$status" "$stage" "$exit_code"
 }
 
+acmesh_task_cleanup_one_time_sudo_password() {
+	id="${1:-}"
+	acmesh_task_validate_id "$id" || return 2
+	base="${ACMESH_TASK_WORKSPACE_DIR:-/tmp/acmesh-console}"
+	workspace="$base/$id"
+	[ -d "$workspace" ] && [ ! -L "$workspace" ] || return 0
+	password_file="$workspace/sudo-password"
+	[ ! -L "$password_file" ] || return 1
+	rm -f -- "$password_file"
+}
+
 acmesh_task_run() {
 	id="$1"
 	operation="$2"
@@ -298,12 +309,22 @@ acmesh_task_run() {
 	acmesh_task_worker_identity_load || return 1
 	ACMESH_CURRENT_TASK_ID="$id"
 	export ACMESH_CURRENT_TASK_ID
+	task_sudo_password_file="${ACMESH_DEPLOY_SUDO_PASSWORD_FILE:-}"
+	cleanup_task_sudo_password() {
+		[ -z "$task_sudo_password_file" ] || { [ ! -L "$task_sudo_password_file" ] && rm -f -- "$task_sudo_password_file"; }
+		acmesh_task_cleanup_one_time_sudo_password "$id" 2>/dev/null || true
+	}
+	trap 'cleanup_task_sudo_password; exit 129' HUP
+	trap 'cleanup_task_sudo_password; exit 130' INT
+	trap 'cleanup_task_sudo_password; exit 143' TERM
+	trap 'cleanup_task_sudo_password' EXIT
 	acmesh_task_write_state_atomic "$id" "$operation" running "$stage" 0 "$started_at" '' '' \
 		"$acmesh_worker_pid" "$acmesh_worker_starttime" "$acmesh_worker_boot_id"
 	set +e
 	(umask 077 && "$@" >> "$log" 2>&1)
 	rc=$?
 	set -e
+	cleanup_task_sudo_password
 	finished_at="$(acmesh_task_now)"
 	if [ "$rc" = 0 ]; then
 		acmesh_task_write_state_atomic "$id" "$operation" success "$stage" "$rc" "$started_at" "$finished_at" ''
@@ -334,6 +355,7 @@ acmesh_task_recover_one_unlocked() {
 			;;
 		*) return 0 ;;
 	esac
+	acmesh_task_cleanup_one_time_sudo_password "$id" || true
 	operation="$(acmesh_task_json_string "$state" operation)" || return 0
 	started_at="$(acmesh_task_json_string "$state" startedAt)" || return 0
 	acmesh_task_write_state_atomic_unlocked "$id" "$operation" interrupted recovery 1 \
@@ -390,6 +412,7 @@ acmesh_task_prune_unlocked() {
 		acmesh_task_state_load "$state" "$id" || continue
 		case "$task_state_status" in
 			success|failed|interrupted|cancelled)
+				acmesh_task_cleanup_one_time_sudo_password "$id" || true
 				rm -f "$state" "$ACMESH_TASK_LOG_DIR/$id.log"
 				remove_count=$((remove_count - 1))
 				;;

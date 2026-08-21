@@ -27,12 +27,25 @@ acmesh_operation_snapshot_reset() {
 	unset ACMESH_AUTH_FULLCHAIN_PEM ACMESH_AUTH_HOST ACMESH_AUTH_PORT ACMESH_AUTH_USER ACMESH_AUTH_SSH_CLIENT ACMESH_AUTH_HOSTKEY_ALGORITHM
 	unset ACMESH_AUTH_HOSTKEY_FINGERPRINT ACMESH_AUTH_KEY_FILE ACMESH_AUTH_FULLCHAIN_FILE ACMESH_AUTH_CERT_FILE ACMESH_AUTH_CA_FILE
 	unset ACMESH_AUTH_RELOAD ACMESH_AUTH_SUDO_MODE ACMESH_AUTH_OWNER ACMESH_AUTH_GROUP ACMESH_AUTH_MODE ACMESH_AUTH_PRESERVE_METADATA ACMESH_AUTH_ACME_HOME ACMESH_AUTH_CORE_TAG ACMESH_AUTH_CORE_EMAIL
+	unset ACMESH_AUTH_SUDO_PASSWORD_REQUIRED ACMESH_AUTH_DEPLOY_SUDO_PASSWORD_REQUIRED
 	unset ACMESH_AUTH_PUBLIC_IDENTITY_DIGEST ACMESH_AUTH_SOURCE_FORMAT ACMESH_AUTH_TARGET_CLIENT ACMESH_AUTH_TARGET_FORMAT
 	unset ACMESH_AUTH_CONFIG_DIGEST ACMESH_AUTH_OVERWRITE_MODE ACMESH_AUTH_EXPORT_SCOPE ACMESH_AUTH_EXPORT_CERTS
 	unset ACMESH_AUTH_OBJECT_IDENTITY ACMESH_AUTH_OBJECT_DIGEST ACMESH_AUTH_VARIANT
 	unset ACMESH_OPERATION_USES_ONCE_CONVERSION ACMESH_OPERATION_CONVERSION_FINGERPRINT ACMESH_OPERATION_RESOLVED_FILE
 	unset ACMESH_RENEW_CERT_CONF ACMESH_RENEW_DOMAIN ACMESH_RENEW_KEY_TYPE ACMESH_RENEW_DNS_API ACMESH_RENEW_CREDENTIALS
 	unset ACMESH_RENEW_CREDENTIAL_SOURCE ACMESH_RENEW_CREDENTIAL_MODE ACMESH_RENEW_CREDENTIAL_KEYS ACMESH_RENEW_PROFILE_ID
+}
+
+acmesh_operation_deploy_sudo_password_required() {
+	[ "${ACMESH_DEPLOY_TYPE:-}" = ssh ] || { printf 'false\n'; return 0; }
+	case "${ACMESH_DEPLOY_SUDO_MODE:-auto}" in
+		always) printf 'true\n' ;;
+		never) printf 'false\n' ;;
+		''|auto)
+			[ "${ACMESH_DEPLOY_USER:-root}" = root ] && printf 'false\n' || printf 'true\n'
+			;;
+		*) return 2 ;;
+	esac
 }
 
 acmesh_operation_snapshot_issue() {
@@ -66,7 +79,7 @@ acmesh_operation_snapshot_issue() {
 	ACMESH_AUTH_CREDENTIAL_KEYS="$(printf '%s\n' "$ACMESH_PROFILE_CREDENTIALS" | sed -n 's/=.*//p' | LC_ALL=C sort)"
 	ACMESH_AUTH_DNS_SLEEP="$ACMESH_PROFILE_DNS_SLEEP" ACMESH_AUTH_WEBROOT="$ACMESH_PROFILE_WEBROOT"
 	ACMESH_AUTH_LISTEN_PORT="$ACMESH_PROFILE_LISTEN_PORT" ACMESH_AUTH_DEPLOY_PROFILE_ID="$issue_deploy_id" ACMESH_AUTH_DEPLOY_FINGERPRINT="$issue_deploy_fingerprint" ACMESH_AUTH_TEST_MODE=false
-	export ACMESH_AUTH_ACCOUNT_ID ACMESH_AUTH_ACCOUNT_EMAIL ACMESH_AUTH_CA ACMESH_AUTH_PRIMARY_DOMAIN ACMESH_AUTH_DOMAINS ACMESH_AUTH_KEY_TYPE ACMESH_AUTH_VALIDATION ACMESH_AUTH_DNS_API ACMESH_AUTH_CREDENTIAL_MODE ACMESH_AUTH_CREDENTIAL_KEYS ACMESH_AUTH_CHALLENGE_ALIAS ACMESH_AUTH_DNS_SLEEP ACMESH_AUTH_WEBROOT ACMESH_AUTH_LISTEN_PORT ACMESH_AUTH_DEPLOY_PROFILE_ID ACMESH_AUTH_TEST_MODE
+	export ACMESH_AUTH_ACCOUNT_ID ACMESH_AUTH_ACCOUNT_EMAIL ACMESH_AUTH_CA ACMESH_AUTH_PRIMARY_DOMAIN ACMESH_AUTH_DOMAINS ACMESH_AUTH_KEY_TYPE ACMESH_AUTH_VALIDATION ACMESH_AUTH_DNS_API ACMESH_AUTH_CREDENTIAL_MODE ACMESH_AUTH_CREDENTIAL_KEYS ACMESH_AUTH_CHALLENGE_ALIAS ACMESH_AUTH_DNS_SLEEP ACMESH_AUTH_WEBROOT ACMESH_AUTH_LISTEN_PORT ACMESH_AUTH_DEPLOY_PROFILE_ID ACMESH_AUTH_TEST_MODE ACMESH_AUTH_SUDO_PASSWORD_REQUIRED ACMESH_AUTH_DEPLOY_SUDO_PASSWORD_REQUIRED
 	export ACMESH_AUTH_DEPLOY_FINGERPRINT
 	ACMESH_OPERATION_RESOLVED_FILE="$issue_resolved"; export ACMESH_OPERATION_RESOLVED_FILE
 	acmesh_auth_snapshot "$issue_operation" issueProfile "$issue_profile_id" "$issue_out" && acmesh_auth_summary "$issue_out" "$issue_summary"
@@ -102,8 +115,9 @@ acmesh_operation_snapshot_deploy() {
 	ACMESH_AUTH_HOST="$ACMESH_DEPLOY_HOST" ACMESH_AUTH_PORT="$ACMESH_DEPLOY_PORT" ACMESH_AUTH_USER="$ACMESH_DEPLOY_USER"
 	ACMESH_AUTH_SSH_CLIENT="$(acmesh_ssh_client_type 2>/dev/null || printf unknown)" ACMESH_AUTH_KEY_FILE="$ACMESH_DEPLOY_KEY_FILE" ACMESH_AUTH_FULLCHAIN_FILE="$ACMESH_DEPLOY_CHAIN_FILE"
 	ACMESH_AUTH_CERT_FILE="$ACMESH_DEPLOY_CERT_FILE" ACMESH_AUTH_CA_FILE="$ACMESH_DEPLOY_CA_FILE" ACMESH_AUTH_RELOAD="$ACMESH_DEPLOY_RELOAD"
-	ACMESH_AUTH_SUDO_MODE="$ACMESH_DEPLOY_SUDO_MODE" ACMESH_AUTH_OWNER="$ACMESH_DEPLOY_OWNER" ACMESH_AUTH_GROUP="$ACMESH_DEPLOY_GROUP" ACMESH_AUTH_MODE="$ACMESH_DEPLOY_MODE" ACMESH_AUTH_PRESERVE_METADATA="$ACMESH_DEPLOY_PRESERVE_METADATA"
-	export ACMESH_AUTH_DEPLOY_TYPE ACMESH_AUTH_SOURCE_TYPE ACMESH_AUTH_SOURCE_IDENTITY ACMESH_AUTH_KEY_VARIANT ACMESH_AUTH_SOURCE_KEY_FILE ACMESH_AUTH_SOURCE_FULLCHAIN_FILE ACMESH_AUTH_KEY_PEM ACMESH_AUTH_FULLCHAIN_PEM ACMESH_AUTH_HOST ACMESH_AUTH_PORT ACMESH_AUTH_USER ACMESH_AUTH_SSH_CLIENT ACMESH_AUTH_HOSTKEY_ALGORITHM ACMESH_AUTH_HOSTKEY_FINGERPRINT ACMESH_AUTH_KEY_FILE ACMESH_AUTH_FULLCHAIN_FILE ACMESH_AUTH_CERT_FILE ACMESH_AUTH_CA_FILE ACMESH_AUTH_RELOAD ACMESH_AUTH_SUDO_MODE ACMESH_AUTH_OWNER ACMESH_AUTH_GROUP ACMESH_AUTH_MODE ACMESH_AUTH_PRESERVE_METADATA
+	sudo_password_required="$(acmesh_operation_deploy_sudo_password_required)" || return $?
+	ACMESH_AUTH_SUDO_MODE="$ACMESH_DEPLOY_SUDO_MODE" ACMESH_AUTH_OWNER="$ACMESH_DEPLOY_OWNER" ACMESH_AUTH_GROUP="$ACMESH_DEPLOY_GROUP" ACMESH_AUTH_MODE="$ACMESH_DEPLOY_MODE" ACMESH_AUTH_PRESERVE_METADATA="$ACMESH_DEPLOY_PRESERVE_METADATA" ACMESH_AUTH_SUDO_PASSWORD_REQUIRED="$sudo_password_required" ACMESH_AUTH_DEPLOY_SUDO_PASSWORD_REQUIRED="$sudo_password_required"
+	export ACMESH_AUTH_DEPLOY_TYPE ACMESH_AUTH_SOURCE_TYPE ACMESH_AUTH_SOURCE_IDENTITY ACMESH_AUTH_KEY_VARIANT ACMESH_AUTH_SOURCE_KEY_FILE ACMESH_AUTH_SOURCE_FULLCHAIN_FILE ACMESH_AUTH_KEY_PEM ACMESH_AUTH_FULLCHAIN_PEM ACMESH_AUTH_HOST ACMESH_AUTH_PORT ACMESH_AUTH_USER ACMESH_AUTH_SSH_CLIENT ACMESH_AUTH_HOSTKEY_ALGORITHM ACMESH_AUTH_HOSTKEY_FINGERPRINT ACMESH_AUTH_KEY_FILE ACMESH_AUTH_FULLCHAIN_FILE ACMESH_AUTH_CERT_FILE ACMESH_AUTH_CA_FILE ACMESH_AUTH_RELOAD ACMESH_AUTH_SUDO_MODE ACMESH_AUTH_OWNER ACMESH_AUTH_GROUP ACMESH_AUTH_MODE ACMESH_AUTH_PRESERVE_METADATA ACMESH_AUTH_SUDO_PASSWORD_REQUIRED ACMESH_AUTH_DEPLOY_SUDO_PASSWORD_REQUIRED
 	ACMESH_OPERATION_RESOLVED_FILE="$deploy_resolved"; export ACMESH_OPERATION_RESOLVED_FILE
 	acmesh_auth_snapshot deploy-run deployProfile "$deploy_profile_id" "$deploy_out" && acmesh_auth_summary "$deploy_out" "$deploy_summary"
 }
@@ -250,10 +264,27 @@ acmesh_operation_recompute() {
 	esac
 }
 
+acmesh_operation_stage_sudo_password() {
+	destination="${1:-}"
+	source="${ACMESH_OPERATION_SUDO_PASSWORD_FILE:-}"
+	ACMESH_DEPLOY_SUDO_PASSWORD_FILE=""
+	export ACMESH_DEPLOY_SUDO_PASSWORD_FILE
+	[ -n "$destination" ] || return 2
+	if [ -z "$source" ]; then
+		return 0
+	fi
+	[ -f "$source" ] && [ ! -L "$source" ] && acmesh_private_file_is_secure "$source" || return 1
+	[ ! -e "$destination" ] && [ ! -L "$destination" ] || return 1
+	cat "$source" | acmesh_atomic_write "$destination" 600 || return 1
+	ACMESH_DEPLOY_SUDO_PASSWORD_FILE="$destination"
+	export ACMESH_DEPLOY_SUDO_PASSWORD_FILE
+}
+
 acmesh_operation_admit() {
 	operation="$1" subject_type="$2" subject_id="$3" decision="$4"
 	case "$operation:$subject_type" in
 		issue:issueProfile)
+			ACMESH_DEPLOY_SUDO_PASSWORD_FILE=""; export ACMESH_DEPLOY_SUDO_PASSWORD_FILE
 			task_id="$(acmesh_task_create issue-profile)"; workspace="$(acmesh_task_workspace "$task_id")"; task_resolved="$workspace/issue-profile.json"
 			[ -f "$ACMESH_OPERATION_RESOLVED_FILE" ] && [ ! -L "$ACMESH_OPERATION_RESOLVED_FILE" ] || return 1
 			cp "$ACMESH_OPERATION_RESOLVED_FILE" "$task_resolved" && chmod 600 "$task_resolved" || return 1
@@ -270,15 +301,23 @@ acmesh_operation_admit() {
 			chmod 600 "$deploy_resolved" || return 1
 			ACMESH_DEPLOY_ALLOW_KEY_CONVERT=1 ACMESH_OPERATION_USE_RESOLVED=1
 			export ACMESH_DEPLOY_ALLOW_KEY_CONVERT ACMESH_OPERATION_USE_RESOLVED
-			acmesh_task_spawn "$task_id" issue-deploy acme-sh acmesh_run_issue_deploy_profile "$subject_id" "$task_resolved" "$deploy_resolved" "$ACMESH_ACME_HOME" || return 1 ;;
+			acmesh_operation_stage_sudo_password "$workspace/sudo-password" || return 1
+			if ! acmesh_task_spawn "$task_id" issue-deploy acme-sh acmesh_run_issue_deploy_profile "$subject_id" "$task_resolved" "$deploy_resolved" "$ACMESH_ACME_HOME"; then
+				rm -f -- "$workspace/sudo-password"
+				return 1
+			fi ;;
 		deploy-run:deployProfile)
 			acmesh_operation_consume_conversion_grant "$subject_id" || return 1
 			task_id="$(acmesh_task_create deploy-profile)"; workspace="$(acmesh_task_workspace "$task_id")"; task_resolved="$workspace/deploy-profile.json"
 			[ -f "$ACMESH_OPERATION_RESOLVED_FILE" ] && [ ! -L "$ACMESH_OPERATION_RESOLVED_FILE" ] || return 1
 			cp "$ACMESH_OPERATION_RESOLVED_FILE" "$task_resolved" && chmod 600 "$task_resolved" || return 1
+			acmesh_operation_stage_sudo_password "$workspace/sudo-password" || return 1
 			ACMESH_DEPLOY_ALLOW_KEY_CONVERT=1 ACMESH_OPERATION_USE_RESOLVED=1
 			export ACMESH_DEPLOY_ALLOW_KEY_CONVERT ACMESH_OPERATION_USE_RESOLVED
-			acmesh_task_spawn "$task_id" deploy-run deploy acmesh_run_deploy_profile "$subject_id" "$task_resolved" || return 1 ;;
+			if ! acmesh_task_spawn "$task_id" deploy-run deploy acmesh_run_deploy_profile "$subject_id" "$task_resolved"; then
+				rm -f -- "$workspace/sudo-password"
+				return 1
+			fi ;;
 		ssh-key-convert:sshKey)
 			if [ "$decision" = once ]; then
 				tmp="$(acmesh_operation_conversion_grant_path "$subject_id")"; acmesh_private_dir "${tmp%/*}" || return 1
@@ -291,7 +330,11 @@ acmesh_operation_admit() {
 			ACMESH_OPERATION_TASK_ID=; export ACMESH_OPERATION_TASK_ID; return 0 ;;
 		renew:certificate)
 			task_id="$(acmesh_task_create renew)"; workspace="$(acmesh_task_workspace "$task_id")"
-			acmesh_task_spawn "$task_id" renew acme-sh acmesh_operation_run_renew "$subject_id" "$ACMESH_OPERATION_FINGERPRINT" "$workspace" || return 1 ;;
+			acmesh_operation_stage_sudo_password "$workspace/sudo-password" || return 1
+			if ! acmesh_task_spawn "$task_id" renew acme-sh acmesh_operation_run_renew "$subject_id" "$ACMESH_OPERATION_FINGERPRINT" "$workspace"; then
+				rm -f -- "$workspace/sudo-password"
+				return 1
+			fi ;;
 		core-install:global) task_id="$(acmesh_task_create core-install)"; acmesh_task_spawn "$task_id" core-install install acmesh_execute_core_install "$ACMESH_AUTH_ACME_HOME" "$ACMESH_AUTH_CORE_EMAIL" "$ACMESH_AUTH_CORE_TAG" || return 1 ;;
 		core-upgrade:global) task_id="$(acmesh_task_create core-upgrade)"; acmesh_task_spawn "$task_id" core-upgrade upgrade acmesh_execute_core_upgrade "$ACMESH_AUTH_ACME_HOME" "$ACMESH_AUTH_CORE_TAG" || return 1 ;;
 		import-apply:pendingImport)
@@ -335,6 +378,10 @@ acmesh_operation_emit_failure() {
 	operation_name="$1" operation_rc="$2" error_message="${3:-operation execution failed}"
 	printf '{"ok":false,"error":"%s","operation":"%s","exitCode":%s}\n' \
 		"$(acmesh_json_escape "$error_message")" "$(acmesh_json_escape "$operation_name")" "$operation_rc"
+}
+
+acmesh_operation_abort_execute_cleanup() {
+	[ -z "${ACMESH_OPERATION_EXECUTE_TMP:-}" ] || rm -rf -- "$ACMESH_OPERATION_EXECUTE_TMP"
 }
 
 acmesh_operation_run_renew() {
@@ -429,11 +476,34 @@ acmesh_operation_execute_challenge() {
 	challenge_id="$(acmesh_request_value "$request_file" challengeId '')" decision="$(acmesh_request_value "$request_file" decision '')"
 	acmesh_auth_valid_id "$challenge_id" || { printf '{"ok":false,"error":"invalid authorization challenge"}\n'; return 2; }
 	case "$decision" in once|remember) ;; *) printf '{"ok":false,"error":"invalid authorization decision"}\n'; return 2 ;; esac
+	sudo_password_type="$(jsonfilter -i "$request_file" -t '@.sudoPassword' 2>/dev/null || true)"
+	case "$sudo_password_type" in
+		''|string) ;;
+		*) printf '{"ok":false,"error":"sudo password must be a JSON string"}\n'; return 2 ;;
+	esac
+	sudo_password=""
+	if [ "$sudo_password_type" = string ]; then
+		sudo_password="$(jsonfilter -i "$request_file" -e '@.sudoPassword' 2>/dev/null || true)"
+		acmesh_canon_safe "$sudo_password" || { printf '{"ok":false,"error":"sudo password contains unsupported control characters"}\n'; return 2; }
+	fi
 	op_execute_tmp="${ACMESH_AUTH_CHALLENGE_DIR}/.execute.$$.$(date +%s)"; acmesh_private_dir "$op_execute_tmp" || return 1
+	ACMESH_OPERATION_EXECUTE_TMP="$op_execute_tmp"; export ACMESH_OPERATION_EXECUTE_TMP
+	ACMESH_OPERATION_SUDO_PASSWORD_FILE=""
+	if [ -n "$sudo_password" ]; then
+		ACMESH_OPERATION_SUDO_PASSWORD_FILE="$op_execute_tmp/sudo-password"
+		printf '%s' "$sudo_password" | acmesh_atomic_write "$ACMESH_OPERATION_SUDO_PASSWORD_FILE" 600 || { rm -rf "$op_execute_tmp"; return 1; }
+	fi
+	export ACMESH_OPERATION_SUDO_PASSWORD_FILE
+	sudo_password=""
 	ACMESH_OPERATION_RESPONSE_FILE="$op_execute_tmp/result"; export ACMESH_OPERATION_RESPONSE_FILE
 	ACMESH_AUTH_RECOMPUTE_CALLBACK=acmesh_operation_recompute ACMESH_AUTH_ADMIT_CALLBACK=acmesh_operation_admit
-	export ACMESH_AUTH_RECOMPUTE_CALLBACK ACMESH_AUTH_ADMIT_CALLBACK
+	ACMESH_AUTH_ABORT_CLEANUP_CALLBACK=acmesh_operation_abort_execute_cleanup
+	export ACMESH_AUTH_RECOMPUTE_CALLBACK ACMESH_AUTH_ADMIT_CALLBACK ACMESH_AUTH_ABORT_CLEANUP_CALLBACK
 	rc=0; umask 077; acmesh_auth_execute "$challenge_id" "$decision" > "$op_execute_tmp/response" || rc=$?; chmod 600 "$op_execute_tmp/response" 2>/dev/null || true
+	# authorization_execute installs its own one-shot signal traps while the
+	# challenge is being consumed. Restore the operation cleanup trap afterwards
+	# so the password file is removed on later interruption paths as well.
+	trap 'rm -rf "$op_execute_tmp"' HUP INT TERM EXIT
 	if [ "$rc" = 0 ]; then case "${ACMESH_AUTH_EXECUTED_OPERATION:-}" in import-apply|secret-export|profile-delete) acmesh_operation_direct_dispatch "$ACMESH_AUTH_EXECUTED_OPERATION" "$ACMESH_AUTH_EXECUTED_SUBJECT_ID" > "$op_execute_tmp/response" || rc=$?;; esac; fi
 	if [ ! -s "$op_execute_tmp/response" ] && [ ! -s "$op_execute_tmp/result" ]; then
 		acmesh_operation_emit_failure "${ACMESH_AUTH_EXECUTED_OPERATION:-authorization-execute}" "$rc" > "$op_execute_tmp/response"
@@ -443,12 +513,12 @@ acmesh_operation_execute_challenge() {
 		if [ -n "$continuation" ]; then
 			parent_operation="$(printf '%s\n' "$continuation" | sed -n '1p')"
 			parent_subject_id="$(printf '%s\n' "$continuation" | sed -n '2p')"
-			rm -rf "$op_execute_tmp"
+			rm -rf "$op_execute_tmp"; trap - HUP INT TERM EXIT
 			acmesh_operation_start "$parent_operation" "$(acmesh_operation_subject_type "$parent_operation")" "$parent_subject_id" "$request_file"
 			return $?
 		fi
-		rm -rf "$op_execute_tmp"; acmesh_operation_start deploy-run deployProfile "$ACMESH_AUTH_EXECUTED_SUBJECT_ID" "$request_file"; return $?
+		rm -rf "$op_execute_tmp"; trap - HUP INT TERM EXIT; acmesh_operation_start deploy-run deployProfile "$ACMESH_AUTH_EXECUTED_SUBJECT_ID" "$request_file"; return $?
 	elif [ "$rc" = 0 ] && [ -f "$op_execute_tmp/result" ]; then cat "$op_execute_tmp/result"; else cat "$op_execute_tmp/response"; fi
-	rm -rf "$op_execute_tmp"
+	rm -rf "$op_execute_tmp"; trap - HUP INT TERM EXIT
 	return "$rc"
 }

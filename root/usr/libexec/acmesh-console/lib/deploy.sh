@@ -175,6 +175,14 @@ acmesh_ssh_key_is_openssh_private() {
 	return 1
 }
 
+acmesh_deploy_cleanup_sudo_password() {
+	password_file="${ACMESH_DEPLOY_SUDO_PASSWORD_FILE:-}"
+	if [ -n "$password_file" ] && [ ! -L "$password_file" ]; then
+		rm -f -- "$password_file"
+	fi
+	ACMESH_DEPLOY_SUDO_PASSWORD_FILE=""
+}
+
 acmesh_deploy_cleanup_temp_key() {
 	for temp_path in \
 		"${ACMESH_DEPLOY_TEMP_KEY:-}" \
@@ -182,9 +190,11 @@ acmesh_deploy_cleanup_temp_key() {
 		"${ACMESH_DEPLOY_TEMP_PEM_FULLCHAIN:-}"; do
 		[ -n "$temp_path" ] && rm -f -- "$temp_path"
 	done
+	acmesh_deploy_cleanup_sudo_password
 	ACMESH_DEPLOY_TEMP_KEY=""
 	ACMESH_DEPLOY_TEMP_PEM_KEY=""
 	ACMESH_DEPLOY_TEMP_PEM_FULLCHAIN=""
+	ACMESH_DEPLOY_SUDO_PASSWORD_FILE=""
 }
 
 acmesh_deploy_stage() {
@@ -548,9 +558,32 @@ acmesh_deploy_remote_write_command() {
 	remote_command="$1"
 	use_sudo="${2:-0}"
 	if [ "$use_sudo" = 1 ] || [ "$use_sudo" = true ]; then
-		printf 'sudo -n sh -c %s' "$(acmesh_shell_quote "$remote_command")"
+		if [ -n "${ACMESH_DEPLOY_SUDO_PASSWORD_FILE:-}" ]; then
+			acmesh_private_file_is_secure "$ACMESH_DEPLOY_SUDO_PASSWORD_FILE" || return 1
+			printf "sudo -S -p '' sh -c %s" "$(acmesh_shell_quote "$remote_command")"
+		else
+			printf 'sudo -n sh -c %s' "$(acmesh_shell_quote "$remote_command")"
+		fi
 	else
 		printf '%s' "$remote_command"
+	fi
+}
+
+acmesh_deploy_ssh_feed_stdin() {
+	input_file="$1"
+	use_sudo="${2:-0}"
+	shift 2
+	if { [ "$use_sudo" = 1 ] || [ "$use_sudo" = true ]; } && [ -n "${ACMESH_DEPLOY_SUDO_PASSWORD_FILE:-}" ]; then
+		acmesh_private_file_is_secure "$ACMESH_DEPLOY_SUDO_PASSWORD_FILE" || return 1
+		{
+			cat "$ACMESH_DEPLOY_SUDO_PASSWORD_FILE"
+			printf '\n'
+			[ -z "$input_file" ] || cat "$input_file"
+		} | "$@"
+	elif [ -n "$input_file" ]; then
+		"$@" < "$input_file"
+	else
+		"$@"
 	fi
 }
 
@@ -624,9 +657,9 @@ acmesh_deploy_ssh_copy() {
 	case "$upload_mode" in ''|*[!0-7]*) return 2 ;; esac
 	remote_command="$(acmesh_deploy_remote_write_command "umask 077; cat > $(acmesh_shell_quote "$tmp_file"); chmod $upload_mode $(acmesh_shell_quote "$tmp_file")" "$use_sudo")"
 	if acmesh_ssh_client_is_dropbear; then
-		HOME="$(acmesh_deploy_dropbear_home)" ssh -i "$ssh_key" -p "$port" "$target" "$remote_command" < "$source_file"
+		HOME="$(acmesh_deploy_dropbear_home)" acmesh_deploy_ssh_feed_stdin "$source_file" "$use_sudo" ssh -i "$ssh_key" -p "$port" "$target" "$remote_command"
 	else
-		ssh -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$(acmesh_ssh_known_hosts_file)" -i "$ssh_key" -p "$port" "$target" "$remote_command" < "$source_file"
+		acmesh_deploy_ssh_feed_stdin "$source_file" "$use_sudo" ssh -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$(acmesh_ssh_known_hosts_file)" -i "$ssh_key" -p "$port" "$target" "$remote_command"
 	fi
 }
 
@@ -638,9 +671,9 @@ acmesh_deploy_ssh_exec() {
 	use_sudo="${5:-0}"
 	remote_command="$(acmesh_deploy_remote_write_command "$remote_command" "$use_sudo")"
 	if acmesh_ssh_client_is_dropbear; then
-		HOME="$(acmesh_deploy_dropbear_home)" ssh -i "$ssh_key" -p "$port" "$target" "$remote_command"
+		HOME="$(acmesh_deploy_dropbear_home)" acmesh_deploy_ssh_feed_stdin '' "$use_sudo" ssh -i "$ssh_key" -p "$port" "$target" "$remote_command"
 	else
-		ssh -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$(acmesh_ssh_known_hosts_file)" -i "$ssh_key" -p "$port" "$target" "$remote_command"
+		acmesh_deploy_ssh_feed_stdin '' "$use_sudo" ssh -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$(acmesh_ssh_known_hosts_file)" -i "$ssh_key" -p "$port" "$target" "$remote_command"
 	fi
 }
 

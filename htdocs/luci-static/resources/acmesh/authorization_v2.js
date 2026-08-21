@@ -25,13 +25,26 @@ function showChallenge(response, options) {
 	options = options || {};
 	return new Promise(function(resolve, reject) {
 		const destructive = !!options.destructive || [ 'certificate-revoke', 'certificate-remove', 'profile-delete', 'import-apply' ].indexOf(response.operation) >= 0;
+		const summary = response.riskSummary && typeof response.riskSummary === 'object' ? response.riskSummary : {};
+		const sudoPasswordRequired = response.sudoPasswordRequired === true || summary.sudoPasswordRequired === true || summary.deploySudoPasswordRequired === true;
+		const sudoPasswordInput = sudoPasswordRequired ? E('input', { 'class': 'form-control', 'type': 'password', 'autocomplete': 'off', 'spellcheck': 'false' }) : null;
 		const finish = function(decision) {
+			if (decision === 'remember' && sudoPasswordInput && sudoPasswordInput.value)
+				return;
 			ui.hideModal();
 			if (!decision) {
 				resolve({ ok: false, cancelled: true });
 				return;
 			}
-			acmeshApi.write('authorization_execute', { challengeId: response.challengeId, decision: decision }).then(function(next) {
+			const request = { challengeId: response.challengeId, decision: decision };
+			if (sudoPasswordInput && sudoPasswordInput.value)
+				request.sudoPassword = sudoPasswordInput.value;
+			if (sudoPasswordInput)
+				sudoPasswordInput.value = '';
+			const requestPromise = acmeshApi.write('authorization_execute', request);
+			if (request.sudoPassword)
+				request.sudoPassword = '';
+			requestPromise.then(function(next) {
 				if (next && next.authorizationRequired) {
 					showChallenge(next, options).then(resolve, reject);
 					return;
@@ -45,12 +58,18 @@ function showChallenge(response, options) {
 		];
 		if (!destructive)
 			buttons.push(E('button', { 'class': 'btn cbi-button cbi-button-positive', 'click': function() { finish('remember'); } }, _('Run and remember')));
-		ui.showModal(_('Risk authorization required'), [
+		const content = [
 			E('p', { 'class': 'acmesh-warning' }, _('Review the exact material operation before continuing.')),
 			E('table', { 'class': 'table acmesh-authorization-summary' }, E('tbody', {}, summaryRows(response.riskSummary))),
 			E('p', { 'class': 'acmesh-authorization-ack' }, ACKNOWLEDGEMENT),
 			E('div', { 'class': 'right' }, buttons)
-		]);
+		];
+		if (sudoPasswordInput) {
+			content.splice(2, 0, E('div', { 'class': 'acmesh-sudo-password' }, [
+				E('label', {}, [_('One-time sudo password (leave blank for passwordless sudo)'), sudoPasswordInput])
+			]));
+		}
+		ui.showModal(_('Risk authorization required'), content);
 	});
 }
 
