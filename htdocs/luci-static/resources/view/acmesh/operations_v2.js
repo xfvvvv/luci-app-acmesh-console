@@ -721,19 +721,29 @@ return view.extend({
 			return (profile.name || profile.id) + ' / ' + deploySourceLabel(profile) + ' / ' + deployTargetLabel(profile);
 		};
 
+		const deployMetadataLabel = function(profile) {
+			if (!profile)
+				return '-';
+			if (profile.preserveMetadata === true)
+				return _('Keep existing owner/group/mode');
+			return (profile.owner || _('default owner')) + ':' + (profile.group || _('default group')) + ' / ' + (profile.mode || _('key 0600 / fullchain 0644'));
+		};
+
 		const resolveDeployProfile = function(profile) {
 			if (!profile)
 				return {
 					label: _('No deploy profile'),
 					target: '-',
 					source: '-',
-					reload: '-'
+					reload: '-',
+					metadata: '-'
 				};
 			return {
 				label: deployProfileLabel(profile),
 				target: deployTargetLabel(profile),
 				source: deploySourceLabel(profile),
-				reload: profile.reloadcmd || '-'
+				reload: profile.reloadcmd || '-',
+				metadata: deployMetadataLabel(profile)
 			};
 		};
 
@@ -1518,6 +1528,11 @@ return view.extend({
 			const fullchainPem = E('textarea', { 'class': 'cbi-input-text acmesh-pem-input', 'placeholder': '-----BEGIN CERTIFICATE-----', 'rows': 9 }, existing.fullchainPem || '');
 			const keyFile = input(existing.keyFile || '', '/etc/ssl/example.key');
 			const fullchain = input(existing.fullchainFile || '', '/etc/ssl/example.fullchain.pem');
+			const owner = input(existing.owner || '', 'root');
+			const group = input(existing.group || '', 'sing-box');
+			const mode = input(existing.mode || '', '0640');
+			const preserveMetadata = E('input', { 'type': 'checkbox' });
+			preserveMetadata.checked = existing.preserveMetadata === true;
 			const reloadcmd = input(existing.reloadcmd || '', 'service nginx reload');
 			const domainField = field(_('Certificate domain'), domain);
 			const keyTypeField = field(_('Certificate key type'), keyType);
@@ -1531,6 +1546,10 @@ return view.extend({
 			const sshKeyField = field(_('SSH private key'), sshKey);
 			const keyFileField = field(_('Key file'), keyFile);
 			const fullchainField = field(_('Fullchain file'), fullchain);
+			const ownerField = field(_('File owner'), owner);
+			const groupField = field(_('File group'), group);
+			const modeField = field(_('File mode'), mode);
+			const preserveMetadataField = E('label', { 'class': 'acmesh-checkbox acmesh-span-all' }, [ preserveMetadata, _('Keep existing owner/group/mode') ]);
 			const currentDeployProfile = function() {
 				const profile = {
 					id: existing.id || id('deploy-preview'),
@@ -1539,6 +1558,10 @@ return view.extend({
 					certSource: certSource.value,
 					keyFile: keyFile.value.trim(),
 					fullchainFile: fullchain.value.trim(),
+					owner: owner.value.trim(),
+					group: group.value.trim(),
+					mode: mode.value.trim(),
+					preserveMetadata: preserveMetadata.checked,
 					reloadcmd: reloadcmd.value.trim()
 				};
 				if (certSource.value === 'managed-acme') Object.assign(profile, { domain: domain.value.trim(), keyType: keyType.value });
@@ -1554,6 +1577,7 @@ return view.extend({
 					[ _('Resolved deploy profile'), resolvedDeploy.label ],
 					[ _('Resolved target'), resolvedDeploy.target ],
 					[ _('Resolved source'), resolvedDeploy.source ],
+					[ _('Resolved file metadata'), resolvedDeploy.metadata ],
 					[ _('Resolved reload command'), resolvedDeploy.reload ]
 				]);
 			};
@@ -1570,12 +1594,16 @@ return view.extend({
 				sourceFullchainField.style.display = sourceMode === 'local-files' ? '' : 'none';
 				keyPemField.style.display = sourceMode === 'paste-pem' ? '' : 'none';
 				fullchainPemField.style.display = sourceMode === 'paste-pem' ? '' : 'none';
+				owner.disabled = preserveMetadata.checked;
+				group.disabled = preserveMetadata.checked;
+				mode.disabled = preserveMetadata.checked;
 				keyFileField.querySelector('span').textContent = remote ? _('Remote key file') : _('Local key file');
 				fullchainField.querySelector('span').textContent = remote ? _('Remote fullchain file') : _('Local fullchain file');
 				refreshDeploySummary();
 			};
 			type.addEventListener('change', renderDeployFields);
 			certSource.addEventListener('change', renderDeployFields);
+			preserveMetadata.addEventListener('change', renderDeployFields);
 			renderDeployFields();
 
 			return E('div', { 'class': 'acmesh-section' }, [
@@ -1596,6 +1624,10 @@ return view.extend({
 					sshKeyField,
 					keyFileField,
 					fullchainField,
+					ownerField,
+					groupField,
+					modeField,
+					preserveMetadataField,
 					field(_('Reload command'), reloadcmd),
 					deploySummary
 				]),

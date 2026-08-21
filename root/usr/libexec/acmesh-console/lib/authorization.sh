@@ -142,6 +142,10 @@ acmesh_auth_emit_deploy() {
 	acmesh_auth_emit_optional owner "${ACMESH_AUTH_OWNER-}" || return $?
 	acmesh_auth_emit_optional group "${ACMESH_AUTH_GROUP-}" || return $?
 	acmesh_auth_emit_optional mode "${ACMESH_AUTH_MODE-}" || return $?
+	preserve_metadata="${ACMESH_AUTH_PRESERVE_METADATA-${ACMESH_DEPLOY_PRESERVE_METADATA-}}"
+	if [ -n "$preserve_metadata" ]; then
+		acmesh_canon_bool preserveMetadata "$preserve_metadata" || return $?
+	fi
 	acmesh_canon_string transactionStrategy "${ACMESH_AUTH_TRANSACTION_STRATEGY:-pair-rollback-v1}" || return $?
 }
 

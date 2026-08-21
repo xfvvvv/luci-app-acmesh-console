@@ -1259,3 +1259,27 @@ msgstr "구성을 로드할 수 없습니다"
 
 msgid "Saving defaults"
 msgstr "기본값 저장 중"
+
+msgid "File owner"
+msgstr "파일 소유자"
+
+msgid "File group"
+msgstr "파일 그룹"
+
+msgid "File mode"
+msgstr "파일 모드"
+
+msgid "Keep existing owner/group/mode"
+msgstr "기존 소유자/그룹/모드 유지"
+
+msgid "Resolved file metadata"
+msgstr "확인된 파일 메타데이터"
+
+msgid "default owner"
+msgstr "기본 소유자"
+
+msgid "default group"
+msgstr "기본 그룹"
+
+msgid "key 0600 / fullchain 0644"
+msgstr "개인 키 0600 / 전체 체인 0644"

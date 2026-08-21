@@ -1259,3 +1259,27 @@ msgstr "無法載入設定"
 
 msgid "Saving defaults"
 msgstr "正在儲存預設設置"
+
+msgid "File owner"
+msgstr "檔案擁有者"
+
+msgid "File group"
+msgstr "檔案群組"
+
+msgid "File mode"
+msgstr "檔案權限"
+
+msgid "Keep existing owner/group/mode"
+msgstr "保留現有擁有者/群組/權限"
+
+msgid "Resolved file metadata"
+msgstr "已解析檔案中繼資料"
+
+msgid "default owner"
+msgstr "預設擁有者"
+
+msgid "default group"
+msgstr "預設群組"
+
+msgid "key 0600 / fullchain 0644"
+msgstr "私鑰 0600 / 憑證鏈 0644"

@@ -59,7 +59,7 @@ acmesh_profile_dns_credentials_valid() {
 acmesh_profile_validate_deploys() {
 	ids=' '; json_select deployProfiles || return 1; json_get_keys indexes
 	for index in $indexes; do
-		json_select "$index" || return 1; json_get_keys keys; acmesh_profile_allowed_keys 'id name type certSource domain keyType host user port sshKey sourceKeyFile sourceFullchainFile keyPem fullchainPem keyFile fullchainFile certFile caFile reloadcmd sudoMode owner group mode' $keys || return 1
+		json_select "$index" || return 1; json_get_keys keys; acmesh_profile_allowed_keys 'id name type certSource domain keyType host user port sshKey sourceKeyFile sourceFullchainFile keyPem fullchainPem keyFile fullchainFile certFile caFile reloadcmd sudoMode owner group mode preserveMetadata' $keys || return 1
 		acmesh_profile_string id 1 || return 1; json_get_var id id; acmesh_profile_validate_id "$id" || return 1; case "$ids" in *" $id "*) return 1;; esac; ids="$ids$id "
 		for key in name domain host user port sshKey sourceKeyFile sourceFullchainFile keyPem fullchainPem keyFile fullchainFile certFile caFile reloadcmd sudoMode owner group mode; do acmesh_profile_string "$key" || return 1; done
 		acmesh_profile_string type 1 || return 1; json_get_var type type; case "$type" in local|ssh) ;; *) return 1;; esac
@@ -68,6 +68,7 @@ acmesh_profile_validate_deploys() {
 		json_get_var port port; [ -z "$port" ] && port=22; case "$port" in *[!0-9]*|'') return 1;; esac; [ "$port" -ge 1 ] && [ "$port" -le 65535 ] || return 1
 		json_get_var sudo_mode sudoMode; case "$sudo_mode" in ''|auto|always|never) ;; *) return 1;; esac
 		json_get_var owner owner; json_get_var group group; json_get_var mode mode; acmesh_profile_identity "$owner" || return 1; acmesh_profile_identity "$group" || return 1; acmesh_profile_file_mode "$mode" || return 1
+		json_get_type preserve_metadata_type preserveMetadata 2>/dev/null || preserve_metadata_type=; [ -z "$preserve_metadata_type" ] || [ "$preserve_metadata_type" = boolean ] || return 1
 		for path_key in keyFile fullchainFile certFile caFile sshKey sourceKeyFile sourceFullchainFile; do json_get_var path "$path_key"; [ -z "$path" ] || acmesh_profile_abs_path "$path" || return 1; done
 		json_get_var key_file keyFile; json_get_var chain_file fullchainFile; [ -n "$key_file" ] && [ -n "$chain_file" ] || return 1
 		json_get_var domain domain; json_get_var sourceKeyFile sourceKeyFile; json_get_var sourceFullchainFile sourceFullchainFile; json_get_var keyPem keyPem; json_get_var fullchainPem fullchainPem; json_get_var host host; json_get_var user user; json_get_var ssh_key sshKey; json_get_var cert_file certFile; json_get_var ca_file caFile; json_select ..
@@ -156,12 +157,13 @@ acmesh_profile_resolve_deploy() (
 	key_file="$(jsonfilter -i "$tmp" -e '@.keyFile')"; chain_file="$(jsonfilter -i "$tmp" -e '@.fullchainFile')"
 	cert_file="$(jsonfilter -i "$tmp" -e '@.certFile' 2>/dev/null || true)"; ca_file="$(jsonfilter -i "$tmp" -e '@.caFile' 2>/dev/null || true)"
 	reload="$(jsonfilter -i "$tmp" -e '@.reloadcmd' 2>/dev/null || true)"; sudo_mode="$(jsonfilter -i "$tmp" -e '@.sudoMode' 2>/dev/null || true)"
-	owner="$(jsonfilter -i "$tmp" -e '@.owner' 2>/dev/null || true)"; group="$(jsonfilter -i "$tmp" -e '@.group' 2>/dev/null || true)"; mode="$(jsonfilter -i "$tmp" -e '@.mode' 2>/dev/null || true)"
+	owner="$(jsonfilter -i "$tmp" -e '@.owner' 2>/dev/null || true)"; group="$(jsonfilter -i "$tmp" -e '@.group' 2>/dev/null || true)"; mode="$(jsonfilter -i "$tmp" -e '@.mode' 2>/dev/null || true)"; preserve_metadata="$(jsonfilter -i "$tmp" -e '@.preserveMetadata' 2>/dev/null || true)"
+	[ "$preserve_metadata" = true ] || preserve_metadata=false
 	digest="$(sha256sum "$ACMESH_CONSOLE_CONFIG" | awk '{print $1}')"; rm -f "$tmp"
-	printf '{"id":"%s","source":{"config":"%s","digest":"%s","certSource":"%s","domain":"%s","keyType":"%s","keyFile":"%s","fullchainFile":"%s","keyPem":"%s","fullchainPem":"%s"},"target":{"type":"%s","host":"%s","port":%s,"user":"%s","sshKey":"%s","sudoMode":"%s"},"destinations":{"keyFile":"%s","fullchainFile":"%s","certFile":"%s","caFile":"%s","owner":"%s","group":"%s","mode":"%s"},"reloadCommand":"%s"}\n' \
+	printf '{"id":"%s","source":{"config":"%s","digest":"%s","certSource":"%s","domain":"%s","keyType":"%s","keyFile":"%s","fullchainFile":"%s","keyPem":"%s","fullchainPem":"%s"},"target":{"type":"%s","host":"%s","port":%s,"user":"%s","sshKey":"%s","sudoMode":"%s"},"destinations":{"keyFile":"%s","fullchainFile":"%s","certFile":"%s","caFile":"%s","owner":"%s","group":"%s","mode":"%s","preserveMetadata":%s},"reloadCommand":"%s"}\n' \
 		"$(acmesh_json_escape "$id")" "$(acmesh_json_escape "$ACMESH_CONSOLE_CONFIG")" "$digest" "$(acmesh_json_escape "$source")" "$(acmesh_json_escape "$domain")" "$(acmesh_json_escape "$key_type")" "$(acmesh_json_escape "$source_key")" "$(acmesh_json_escape "$source_chain")" "$(acmesh_json_escape "$key_pem")" "$(acmesh_json_escape "$chain_pem")" \
 		"$(acmesh_json_escape "$type")" "$(acmesh_json_escape "$host")" "${port:-22}" "$(acmesh_json_escape "$user")" "$(acmesh_json_escape "$ssh_key")" "$(acmesh_json_escape "$sudo_mode")" \
-		"$(acmesh_json_escape "$key_file")" "$(acmesh_json_escape "$chain_file")" "$(acmesh_json_escape "$cert_file")" "$(acmesh_json_escape "$ca_file")" "$(acmesh_json_escape "$owner")" "$(acmesh_json_escape "$group")" "$(acmesh_json_escape "$mode")" "$(acmesh_json_escape "$reload")" | acmesh_atomic_write "$output" 600
+		"$(acmesh_json_escape "$key_file")" "$(acmesh_json_escape "$chain_file")" "$(acmesh_json_escape "$cert_file")" "$(acmesh_json_escape "$ca_file")" "$(acmesh_json_escape "$owner")" "$(acmesh_json_escape "$group")" "$(acmesh_json_escape "$mode")" "$preserve_metadata" "$(acmesh_json_escape "$reload")" | acmesh_atomic_write "$output" 600
 )
 
 acmesh_profile_load_deploy_file() {
@@ -183,6 +185,8 @@ acmesh_profile_load_deploy_file() {
 	ACMESH_DEPLOY_OWNER="$(jsonfilter -i "$path" -e '@.destinations.owner' 2>/dev/null || true)"
 	ACMESH_DEPLOY_GROUP="$(jsonfilter -i "$path" -e '@.destinations.group' 2>/dev/null || true)"
 	ACMESH_DEPLOY_MODE="$(jsonfilter -i "$path" -e '@.destinations.mode' 2>/dev/null || true)"
+	ACMESH_DEPLOY_PRESERVE_METADATA="$(jsonfilter -i "$path" -e '@.destinations.preserveMetadata' 2>/dev/null || true)"
+	[ "$ACMESH_DEPLOY_PRESERVE_METADATA" = true ] || ACMESH_DEPLOY_PRESERVE_METADATA=false
 }
 
 acmesh_profile_load_issue_file() {

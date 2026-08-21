@@ -1259,3 +1259,27 @@ msgstr "无法加载配置"
 
 msgid "Saving defaults"
 msgstr "正在保存默认设置"
+
+msgid "File owner"
+msgstr "文件所有者"
+
+msgid "File group"
+msgstr "文件组"
+
+msgid "File mode"
+msgstr "文件权限"
+
+msgid "Keep existing owner/group/mode"
+msgstr "保持原有所有者/组/权限"
+
+msgid "Resolved file metadata"
+msgstr "已解析文件元数据"
+
+msgid "default owner"
+msgstr "默认所有者"
+
+msgid "default group"
+msgstr "默认组"
+
+msgid "key 0600 / fullchain 0644"
+msgstr "私钥 0600 / 证书链 0644"

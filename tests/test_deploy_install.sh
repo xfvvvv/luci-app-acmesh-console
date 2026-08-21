@@ -570,6 +570,8 @@ local_meta="$(acmesh_build_profile_deploy_command local local-files '' /tmp/loca
 case "$local_meta" in *"chmod '0640' '/tmp/local.key' '/tmp/local.fullchain'"*"chown 'root':'root' '/tmp/local.key' '/tmp/local.fullchain'"*) ;; *) echo "ordinary local metadata is incomplete"; echo "$local_meta"; exit 1;; esac
 ssh_meta="$(acmesh_build_profile_deploy_command ssh local-files '' /etc/ssl/remote.key /etc/ssl/remote.fullchain '' '' '' "$DEPLOY_TMP/source.key" "$DEPLOY_TMP/source.fullchain.pem" '' '' 192.0.2.20 22 root /root/.ssh/id ecc never root ssl-cert 0640)"
 case "$ssh_meta" in *"chmod 0640"*remote.fullchain*"chown"*root*remote.fullchain*"chgrp"*ssl-cert*remote.fullchain*"chmod 0640"*remote.key*"chown"*root*remote.key*"chgrp"*ssl-cert*remote.key*) ;; *) echo "SSH key/fullchain metadata is incomplete"; echo "$ssh_meta"; exit 1;; esac
+preserve_meta="$(acmesh_build_profile_deploy_command local local-files '' /tmp/preserve.key /tmp/preserve.fullchain '' '' '' "$DEPLOY_TMP/source.key" "$DEPLOY_TMP/source.fullchain.pem" '' '' '' 22 root '' ecc never root ssl-cert 0640 true)"
+case "$preserve_meta" in *"preserve existing owner/group/mode"*) ;; *) echo "preserve metadata preview is incomplete"; echo "$preserve_meta"; exit 1;; esac
 
 if [ "$(id -u)" = 0 ]; then
 	managed_exec_home="$ROOT/tests/.tmp/managed-meta-home"
@@ -591,11 +593,41 @@ EOF
 	for installed in "$managed_exec_target/key.pem" "$managed_exec_target/fullchain.pem"; do
 		set -- $(LC_ALL=C ls -ld "$installed")
 		case "$installed" in
-			*/key.pem) expected_mode=-rw------- ;;
+			*/key.pem) expected_mode=-rw-r----- ;;
 			*) expected_mode=-rw-r----- ;;
 		esac
 		[ "$1" = "$expected_mode" ] && [ "$3:$4" = root:root ] || { echo "managed local metadata was not applied to $installed"; exit 1; }
 	done
+	preserve_exec_target="$ROOT/tests/.tmp/preserve-meta-target"
+	rm -rf "$preserve_exec_target"
+	mkdir -p "$preserve_exec_target"
+	printf 'old-key\n' > "$preserve_exec_target/key.pem"
+	printf 'old-chain\n' > "$preserve_exec_target/fullchain.pem"
+	chmod 0640 "$preserve_exec_target/key.pem"
+	chmod 0660 "$preserve_exec_target/fullchain.pem"
+	ACMESH_CURRENT_TASK_ID=20260101010109-785 \
+		acmesh_execute_profile_deploy local paste-pem preserve.example.com \
+		"$preserve_exec_target/key.pem" "$preserve_exec_target/fullchain.pem" '' '' '' \
+		'' '' 'preserve-private-key' 'preserve-fullchain' '' 22 root '' ecc '' '' '' '' true >/dev/null
+	for installed in "$preserve_exec_target/key.pem" "$preserve_exec_target/fullchain.pem"; do
+		set -- $(LC_ALL=C ls -ld "$installed")
+		case "$installed" in
+			*/key.pem) expected_mode=-rw-r----- ;;
+			*) expected_mode=-rw-rw---- ;;
+		esac
+		[ "$1" = "$expected_mode" ] && [ "$3:$4" = root:root ] || { echo "preserved local metadata was not applied to $installed"; exit 1; }
+	done
+	preserve_missing_target="$ROOT/tests/.tmp/preserve-meta-missing-target"
+	rm -rf "$preserve_missing_target"
+	mkdir -p "$preserve_missing_target"
+	ACMESH_CURRENT_TASK_ID=20260101010110-786 \
+		acmesh_execute_profile_deploy local paste-pem preserve-missing.example.com \
+		"$preserve_missing_target/key.pem" "$preserve_missing_target/fullchain.pem" '' '' '' \
+		'' '' 'missing-private-key' 'missing-fullchain' '' 22 root '' ecc '' '' '' '' true >/dev/null
+	set -- $(LC_ALL=C ls -ld "$preserve_missing_target/key.pem")
+	[ "$1" = -rw------- ] || { echo "missing preserved key should use the default 0600 mode"; exit 1; }
+	set -- $(LC_ALL=C ls -ld "$preserve_missing_target/fullchain.pem")
+	[ "$1" = -rw-r--r-- ] || { echo "missing preserved fullchain should use the default 0644 mode"; exit 1; }
 fi
 
 same_lock_a="$(acmesh_deploy_target_lock_path local paste-pem shared.example.com /etc/ssl/shared.key /etc/ssl/shared.fullchain.pem '' '' '' '' '' '' '' '' 22 root '' ecc)"

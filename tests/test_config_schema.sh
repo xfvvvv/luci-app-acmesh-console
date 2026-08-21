@@ -14,7 +14,7 @@ write() { printf '%s\n' "$2" > "$TMP/$1.json"; }
 reject() { acmesh_config_validate_file "$TMP/$1.json" >/dev/null 2>&1 && { echo "accepted invalid config: $1"; exit 1; } || :; }
 accept() { acmesh_config_validate_file "$TMP/$1.json" >/dev/null || { echo "rejected valid config: $1"; exit 1; }; }
 
-write valid '{"schemaVersion":2,"global":{"defaultAccountEmail":"ops@example.org","coreTag":"v3.1.4","acmeHome":"/etc/acme"},"accountProfiles":[{"id":"acc","name":"LE","ca":"letsencrypt","accountEmail":""}],"issueProfiles":[{"id":"issue","name":"Example","domain":"example.org","accountProfileId":"acc","deployProfileId":"deploy","keyType":"ec256","validationMethod":"dns","testModeOverride":"force-real-mode","dnsApi":"dns_cf","credentialMode":"token","credentials":{"CF_Token":"secret"}}],"deployProfiles":[{"id":"deploy","name":"nginx","type":"ssh","certSource":"managed-acme","domain":"example.org","keyType":"ec256","host":"192.0.2.10","user":"root","port":"22","sshKey":"/root/.ssh/id_ed25519","keyFile":"/etc/ssl/example.key","fullchainFile":"/etc/ssl/example.pem","reloadcmd":"service nginx reload"}]}'
+write valid '{"schemaVersion":2,"global":{"defaultAccountEmail":"ops@example.org","coreTag":"v3.1.4","acmeHome":"/etc/acme"},"accountProfiles":[{"id":"acc","name":"LE","ca":"letsencrypt","accountEmail":""}],"issueProfiles":[{"id":"issue","name":"Example","domain":"example.org","accountProfileId":"acc","deployProfileId":"deploy","keyType":"ec256","validationMethod":"dns","testModeOverride":"force-real-mode","dnsApi":"dns_cf","credentialMode":"token","credentials":{"CF_Token":"secret"}}],"deployProfiles":[{"id":"deploy","name":"nginx","type":"ssh","certSource":"managed-acme","domain":"example.org","keyType":"ec256","host":"192.0.2.10","user":"root","port":"22","sshKey":"/root/.ssh/id_ed25519","keyFile":"/etc/ssl/example.key","fullchainFile":"/etc/ssl/example.pem","reloadcmd":"service nginx reload","preserveMetadata":true}]}'
 accept valid
 
 write nested-types '{"schemaVersion":2,"global":[],"accountProfiles":{},"issueProfiles":[],"deployProfiles":[]}'
@@ -54,6 +54,7 @@ sed 's/"validationMethod":"dns","testModeOverride":"force-real-mode","dnsApi":"d
 sed 's/"reloadcmd":"service nginx reload"/"reloadcmd":"service nginx reload","sudoMode":"sometimes"/' "$TMP/valid.json" > "$TMP/bad-sudo-mode.json"; reject bad-sudo-mode
 sed 's/"reloadcmd":"service nginx reload"/"reloadcmd":"service nginx reload","owner":"root;id"/' "$TMP/valid.json" > "$TMP/bad-owner.json"; reject bad-owner
 sed 's/"reloadcmd":"service nginx reload"/"reloadcmd":"service nginx reload","mode":"999"/' "$TMP/valid.json" > "$TMP/bad-mode.json"; reject bad-mode
+sed 's/"preserveMetadata":true/"preserveMetadata":"true"/' "$TMP/valid.json" > "$TMP/bad-preserve-metadata.json"; reject bad-preserve-metadata
 printf '%s\n' "$(sed 's/\"reloadcmd\":\"service nginx reload\"/\"reloadcmd\":\"service nginx reload\",\"mode\":\"0640\\n;id\"/' "$TMP/valid.json")" > "$TMP/multiline-mode.json"; reject multiline-mode
 printf '%s\n' "$(sed 's/\"domain\":\"example.org\"/\"domain\":\"example.org\\nattacker.example\"/' "$TMP/valid.json")" > "$TMP/multiline-domain.json"; reject multiline-domain
 sed 's/"type":"ssh"/"type":"local"/' "$TMP/valid.json" > "$TMP/local-with-ssh-fields.json"; reject local-with-ssh-fields

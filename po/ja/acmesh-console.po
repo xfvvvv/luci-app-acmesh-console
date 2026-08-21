@@ -1259,3 +1259,27 @@ msgstr "設定を読み込めません"
 
 msgid "Saving defaults"
 msgstr "既定値を保存中"
+
+msgid "File owner"
+msgstr "ファイル所有者"
+
+msgid "File group"
+msgstr "ファイルグループ"
+
+msgid "File mode"
+msgstr "ファイルモード"
+
+msgid "Keep existing owner/group/mode"
+msgstr "既存の所有者/グループ/モードを維持"
+
+msgid "Resolved file metadata"
+msgstr "解決済みファイルメタデータ"
+
+msgid "default owner"
+msgstr "既定の所有者"
+
+msgid "default group"
+msgstr "既定のグループ"
+
+msgid "key 0600 / fullchain 0644"
+msgstr "秘密鍵 0600 / フルチェーン 0644"

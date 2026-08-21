@@ -93,7 +93,7 @@ deploy() {
 	ACMESH_AUTH_HOST="${HOST:-router.example}" ACMESH_AUTH_PORT=22 ACMESH_AUTH_USER=root ACMESH_AUTH_SSH_CLIENT=dropbear \
 	ACMESH_AUTH_HOSTKEY_ALGORITHM=ssh-ed25519 ACMESH_AUTH_HOSTKEY_FINGERPRINT="${HOST_FP:-SHA256:one}" \
 	ACMESH_AUTH_KEY_FILE="${DEST_KEY:-/etc/ssl/key.pem}" ACMESH_AUTH_FULLCHAIN_FILE=/etc/ssl/fullchain.pem \
-	ACMESH_AUTH_RELOAD="${RELOAD:-/etc/init.d/uhttpd reload}" ACMESH_AUTH_SUDO_MODE=never ACMESH_AUTH_TRANSACTION_STRATEGY=pair-rollback-v1 \
+	ACMESH_AUTH_RELOAD="${RELOAD:-/etc/init.d/uhttpd reload}" ACMESH_AUTH_SUDO_MODE=never ACMESH_AUTH_PRESERVE_METADATA="${PRESERVE_METADATA-}" ACMESH_AUTH_TRANSACTION_STRATEGY=pair-rollback-v1 \
 	acmesh_auth_snapshot deploy-run deployProfile deploy-1 "$out"
 }
 KEY_PEM='-----BEGIN PRIVATE KEY-----
@@ -109,6 +109,8 @@ for assignment in 'HOST=other.example' 'DEST_KEY=/other/key.pem' 'RELOAD=/bin/tr
 	deploy "$TMP/out/d2"; [ "$(fp "$TMP/out/d1")" != "$(fp "$TMP/out/d2")" ]
 done
 unset HOST DEST_KEY RELOAD HOST_FP
+PRESERVE_METADATA=true deploy "$TMP/out/d-preserve"; [ "$(fp "$TMP/out/d1")" != "$(fp "$TMP/out/d-preserve")" ]
+unset PRESERVE_METADATA
 
 ACMESH_AUTH_ACME_HOME=/etc/acme ACMESH_AUTH_CORE_TAG=3.1.0 acmesh_auth_snapshot core-upgrade core acme.sh "$TMP/out/core1"
 ACMESH_AUTH_ACME_HOME=/etc/acme ACMESH_AUTH_CORE_TAG=3.2.0 acmesh_auth_snapshot core-upgrade core acme.sh "$TMP/out/core2"

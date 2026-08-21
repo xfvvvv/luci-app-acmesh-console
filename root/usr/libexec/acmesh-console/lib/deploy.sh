@@ -100,6 +100,58 @@ acmesh_deploy_metadata_valid() {
 '*) return 1;; [0-7][0-7][0-7]|0[0-7][0-7][0-7]) return 0;; *) return 1;; esac
 }
 
+acmesh_deploy_preserve_metadata_valid() {
+	case "${1:-false}" in ''|true|false) return 0;; *) return 1;; esac
+}
+
+acmesh_deploy_stat_metadata() {
+	stat -c '%u:%g:%a' "$1" 2>/dev/null
+}
+
+acmesh_deploy_stat_metadata_valid() {
+	metadata="$1"
+	case "$metadata" in *:*:*) ;; *) return 1;; esac
+	metadata_uid="${metadata%%:*}"
+	metadata_rest="${metadata#*:}"
+	metadata_gid="${metadata_rest%%:*}"
+	metadata_mode="${metadata_rest#*:}"
+	case "$metadata_uid" in ''|*[!0-9]*) return 1;; esac
+	case "$metadata_gid" in ''|*[!0-9]*) return 1;; esac
+	case "$metadata_mode" in [0-7]|[0-7][0-7]|[0-7][0-7][0-7]|0[0-7][0-7][0-7]) return 0;; *) return 1;; esac
+}
+
+acmesh_deploy_apply_metadata() {
+	path="$1"
+	preserve_metadata="$2"
+	preserved="$3"
+	owner="$4"
+	group="$5"
+	mode="$6"
+	default_mode="$7"
+	if [ "$preserve_metadata" = true ]; then
+		if [ -n "$preserved" ]; then
+			acmesh_deploy_stat_metadata_valid "$preserved" || return 1
+			metadata_uid="${preserved%%:*}"
+			metadata_rest="${preserved#*:}"
+			metadata_gid="${metadata_rest%%:*}"
+			metadata_mode="${metadata_rest#*:}"
+			chown "$metadata_uid:$metadata_gid" "$path" || return 1
+			chmod "$metadata_mode" "$path" || return 1
+		else
+			chmod "$default_mode" "$path" || return 1
+		fi
+		return 0
+	fi
+	if [ -n "$owner" ] && [ -n "$group" ]; then
+		chown "$owner:$group" "$path" || return 1
+	elif [ -n "$owner" ]; then
+		chown "$owner" "$path" || return 1
+	elif [ -n "$group" ]; then
+		chgrp "$group" "$path" || return 1
+	fi
+	chmod "${mode:-$default_mode}" "$path"
+}
+
 acmesh_deploy_metadata_command() {
 	key_file="$1" fullchain_file="$2" owner="$3" group="$4" mode="$5"
 	acmesh_deploy_metadata_valid "$owner" "$group" "$mode" || return 1
@@ -234,13 +286,15 @@ acmesh_deploy_transaction() (
 	reload_command="${5:-}"
 	owner="${6:-}"
 	group="${7:-}"
-	cert_mode="${8:-644}"
+	file_mode="${8:-}"
+	preserve_metadata="${9:-false}"
 	task_id="${ACMESH_CURRENT_TASK_ID:-}"
 	printf '%s\n' "$task_id" | grep -Eq '^[0-9]{14}-[0-9]+$' || exit 2
 	[ -f "$source_key" ] && [ -f "$source_fullchain" ] || exit 1
 	acmesh_ssh_validate_remote_path "$key_target" || exit 2
 	acmesh_ssh_validate_remote_path "$cert_target" || exit 2
-	acmesh_deploy_metadata_valid "$owner" "$group" "$cert_mode" || exit 2
+	acmesh_deploy_metadata_valid "$owner" "$group" "$file_mode" || exit 2
+	acmesh_deploy_preserve_metadata_valid "$preserve_metadata" || exit 2
 	acmesh_deploy_destination_preflight local "$key_target" "$cert_target" || exit $?
 	key_target="$ACMESH_DEPLOY_NORMALIZED_KEY_TARGET"
 	cert_target="$ACMESH_DEPLOY_NORMALIZED_CERT_TARGET"
@@ -288,20 +342,19 @@ acmesh_deploy_transaction() (
 		echo "unresolved deployment backup exists" >&2
 		exit 1
 	fi
+	key_metadata=
+	cert_metadata=
+	if [ "$preserve_metadata" = true ]; then
+		if [ -e "$key_target" ]; then key_metadata="$(acmesh_deploy_stat_metadata "$key_target")" || exit 1; fi
+		if [ -e "$cert_target" ]; then cert_metadata="$(acmesh_deploy_stat_metadata "$cert_target")" || exit 1; fi
+	fi
 	[ -e "$key_target" ] || key_absent=1
 	[ -e "$cert_target" ] || cert_absent=1
 	acmesh_deploy_stage upload
 	(umask 077; cp "$source_key" "$key_new") || exit 1
-	chmod 600 "$key_new" || exit 1
+	acmesh_deploy_apply_metadata "$key_new" "$preserve_metadata" "$key_metadata" "$owner" "$group" "$file_mode" 600 || exit 1
 	(umask 077; cp "$source_fullchain" "$cert_new") || exit 1
-	chmod "$cert_mode" "$cert_new" || exit 1
-	if [ -n "$owner" ] && [ -n "$group" ]; then
-		chown "$owner:$group" "$key_new" "$cert_new" || exit 1
-	elif [ -n "$owner" ]; then
-		chown "$owner" "$key_new" "$cert_new" || exit 1
-	elif [ -n "$group" ]; then
-		chgrp "$group" "$key_new" "$cert_new" || exit 1
-	fi
+	acmesh_deploy_apply_metadata "$cert_new" "$preserve_metadata" "$cert_metadata" "$owner" "$group" "$file_mode" 644 || exit 1
 
 	acmesh_deploy_stage backup
 	if [ "$key_absent" = 0 ]; then mv -f "$key_target" "$key_backup" || exit 1; fi
@@ -310,8 +363,8 @@ acmesh_deploy_transaction() (
 	acmesh_deploy_stage replace
 	if ! mv -f "$key_new" "$key_target"; then rollback || true; exit 1; fi
 	if ! mv -f "$cert_new" "$cert_target"; then rollback || true; exit 1; fi
-	chmod 600 "$key_target" || { rollback || true; exit 1; }
-	chmod "$cert_mode" "$cert_target" || { rollback || true; exit 1; }
+	acmesh_deploy_apply_metadata "$key_target" "$preserve_metadata" "$key_metadata" "$owner" "$group" "$file_mode" 600 || { rollback || true; exit 1; }
+	acmesh_deploy_apply_metadata "$cert_target" "$preserve_metadata" "$cert_metadata" "$owner" "$group" "$file_mode" 644 || { rollback || true; exit 1; }
 
 	acmesh_deploy_stage reload
 	if [ -n "$reload_command" ] && ! sh -c "$reload_command"; then
@@ -679,9 +732,12 @@ release_lock \"\$lock_first\""
 acmesh_deploy_remote_transaction() {
 	source_key="$1" source_fullchain="$2" key_target="$3" cert_target="$4"
 	target="$5" ssh_key="$6" port="$7" use_sudo="$8" reload_command="${9:-}"
-	owner="${10:-}" group="${11:-}" cert_mode="${12:-644}"
+	owner="${10:-}" group="${11:-}" file_mode="${12:-}" preserve_metadata="${13:-false}"
+	key_mode="${file_mode:-600}" cert_mode="${file_mode:-644}"
 	task_id="${ACMESH_CURRENT_TASK_ID:-}"
 	printf '%s\n' "$task_id" | grep -Eq '^[0-9]{14}-[0-9]+$' || return 2
+	acmesh_deploy_metadata_valid "$owner" "$group" "$file_mode" || return 2
+	acmesh_deploy_preserve_metadata_valid "$preserve_metadata" || return 2
 	acmesh_deploy_destination_preflight ssh "$key_target" "$cert_target" || return $?
 	key_target="$ACMESH_DEPLOY_NORMALIZED_KEY_TARGET"
 	cert_target="$ACMESH_DEPLOY_NORMALIZED_CERT_TARGET"
@@ -732,7 +788,7 @@ release_lock() { lock=\"\$1\"; verify_prepared \"\$lock\" || return 76; rm -f \"
 	fi
 
 	acmesh_deploy_stage upload
-	if acmesh_deploy_ssh_copy "$source_key" "$target" "$key_target" "$ssh_key" "$port" "$use_sudo" "$key_new" 600; then :; else status=$?; acmesh_deploy_ssh_exec "$target" "$ssh_key" "$port" "$cancel_command" "$use_sudo" >/dev/null 2>&1 || true; return "$status"; fi
+	if acmesh_deploy_ssh_copy "$source_key" "$target" "$key_target" "$ssh_key" "$port" "$use_sudo" "$key_new" "$key_mode"; then :; else status=$?; acmesh_deploy_ssh_exec "$target" "$ssh_key" "$port" "$cancel_command" "$use_sudo" >/dev/null 2>&1 || true; return "$status"; fi
 	if acmesh_deploy_ssh_copy "$source_fullchain" "$target" "$cert_target" "$ssh_key" "$port" "$use_sudo" "$cert_new" "$cert_mode"; then :; else status=$?; acmesh_deploy_ssh_exec "$target" "$ssh_key" "$port" "$cancel_command" "$use_sudo" >/dev/null 2>&1 || true; return "$status"; fi
 
 	remote_script="set -eu
@@ -740,6 +796,8 @@ acmesh_action=transaction
 $lock_setup
 key_new=$(acmesh_shell_quote "$key_new"); cert_new=$(acmesh_shell_quote "$cert_new"); key_backup=$(acmesh_shell_quote "$key_backup"); cert_backup=$(acmesh_shell_quote "$cert_backup")
 reload_command=$(acmesh_shell_quote "$reload_command")
+preserve_metadata=$(acmesh_shell_quote "$preserve_metadata")
+owner=$(acmesh_shell_quote "$owner"); group=$(acmesh_shell_quote "$group"); file_mode=$(acmesh_shell_quote "$file_mode")
 phase=prepare; key_absent=\"\$coordinator/key-absent-\$generation\"; cert_absent=\"\$coordinator/cert-absent-\$generation\"
 verify_lock() { lock=\"\$1\"; expected=\"\$2\"; [ \"\$(cat \"\$lock/generation\" 2>/dev/null || true)\" = \"\$generation\" ] && [ \"\$(cat \"\$lock/state\" 2>/dev/null || true)\" = \"\$expected\" ]; }
 verify_all() { verify_lock \"\$lock_first\" \"\$1\" && { [ -z \"\$lock_second\" ] || verify_lock \"\$lock_second\" \"\$1\"; }; }
@@ -755,21 +813,23 @@ trap finish EXIT; trap 'exit 129' HUP; trap 'exit 130' INT; trap 'exit 143' TERM
 create_active() { lock=\"\$1\"; printf '%s\n' \"\$generation\" > \"\$lock/active.tmp-\$generation\"; chmod 600 \"\$lock/active.tmp-\$generation\"; mv -f \"\$lock/active.tmp-\$generation\" \"\$lock/active-\$generation\"; }
 create_active \"\$lock_first\"; [ -z \"\$lock_second\" ] || create_active \"\$lock_second\"
 cas_state prepared \"running:\$phase\"
-chmod 600 \"\$key_new\"; chmod $(acmesh_shell_quote "$cert_mode") \"\$cert_new\"
+stat_metadata() { stat -c '%u:%g:%a' \"\$1\"; }
+stat_metadata_valid() { metadata=\"\$1\"; case \"\$metadata\" in *:*:*) ;; *) return 1;; esac; metadata_uid=\"\${metadata%%:*}\"; metadata_rest=\"\${metadata#*:}\"; metadata_gid=\"\${metadata_rest%%:*}\"; metadata_mode=\"\${metadata_rest#*:}\"; case \"\$metadata_uid\" in ''|*[!0-9]*) return 1;; esac; case \"\$metadata_gid\" in ''|*[!0-9]*) return 1;; esac; case \"\$metadata_mode\" in [0-7]|[0-7][0-7]|[0-7][0-7][0-7]|0[0-7][0-7][0-7]) return 0;; *) return 1;; esac; }
+apply_metadata() { path=\"\$1\"; preserved=\"\$2\"; default_mode=\"\$3\"; if [ \"\$preserve_metadata\" = true ]; then if [ -n \"\$preserved\" ]; then stat_metadata_valid \"\$preserved\" || return 1; metadata_uid=\"\${preserved%%:*}\"; metadata_rest=\"\${preserved#*:}\"; metadata_gid=\"\${metadata_rest%%:*}\"; metadata_mode=\"\${metadata_rest#*:}\"; chown \"\$metadata_uid:\$metadata_gid\" \"\$path\" || return 1; chmod \"\$metadata_mode\" \"\$path\" || return 1; else chmod \"\$default_mode\" \"\$path\" || return 1; fi; return 0; fi; if [ -n \"\$owner\" ] && [ -n \"\$group\" ]; then chown \"\$owner:\$group\" \"\$path\" || return 1; elif [ -n \"\$owner\" ]; then chown \"\$owner\" \"\$path\" || return 1; elif [ -n \"\$group\" ]; then chgrp \"\$group\" \"\$path\" || return 1; fi; effective_mode=\"\$file_mode\"; [ -n \"\$effective_mode\" ] || effective_mode=\"\$default_mode\"; chmod \"\$effective_mode\" \"\$path\"; }
+key_metadata=; cert_metadata=
+if [ \"\$preserve_metadata\" = true ]; then
+	if [ -e \"\$key_target\" ]; then key_metadata=\$(stat_metadata \"\$key_target\"); fi
+	if [ -e \"\$cert_target\" ]; then cert_metadata=\$(stat_metadata \"\$cert_target\"); fi
+fi
+apply_metadata \"\$key_new\" \"\$key_metadata\" 600
+apply_metadata \"\$cert_new\" \"\$cert_metadata\" 644
 cas_state \"running:\$phase\" running:backup; phase=backup
 if [ -e \"\$key_target\" ]; then mv -f \"\$key_target\" \"\$key_backup\"; else : > \"\$key_absent\"; fi
 if [ -e \"\$cert_target\" ]; then mv -f \"\$cert_target\" \"\$cert_backup\"; else : > \"\$cert_absent\"; fi
 cas_state running:backup running:replace; phase=replace
 mv -f \"\$key_new\" \"\$key_target\"; mv -f \"\$cert_new\" \"\$cert_target\"
 cas_state running:replace running:metadata; phase=metadata
-chmod 600 \"\$key_target\"; chmod $(acmesh_shell_quote "$cert_mode") \"\$cert_target\""
-	if [ -n "$owner" ] && [ -n "$group" ]; then remote_script="$remote_script
-chown $(acmesh_shell_quote "$owner:$group") \"\$key_target\" \"\$cert_target\""
-	elif [ -n "$owner" ]; then remote_script="$remote_script
-chown $(acmesh_shell_quote "$owner") \"\$key_target\" \"\$cert_target\""
-	elif [ -n "$group" ]; then remote_script="$remote_script
-chgrp $(acmesh_shell_quote "$group") \"\$key_target\" \"\$cert_target\""
-	fi
+	apply_metadata \"\$key_target\" \"\$key_metadata\" 600; apply_metadata \"\$cert_target\" \"\$cert_metadata\" 644"
 	remote_script="$remote_script
 cas_state running:metadata running:reload; phase=reload
 if [ -n \"\$reload_command\" ] && ! sh -c \"\$reload_command\"; then exit 70; fi
@@ -870,7 +930,9 @@ acmesh_build_profile_deploy_command() {
 	owner="${19:-}"
 	group="${20:-}"
 	file_mode="${21:-}"
+	preserve_metadata="${22:-false}"
 	acmesh_deploy_metadata_valid "$owner" "$group" "$file_mode" || { echo "invalid deploy metadata" >&2; return 1; }
+	acmesh_deploy_preserve_metadata_valid "$preserve_metadata" || { echo "invalid preserve metadata flag" >&2; return 1; }
 
 	[ -n "$key_file" ] || { echo "target key file is required" >&2; return 1; }
 	[ -n "$fullchain_file" ] || { echo "target fullchain file is required" >&2; return 1; }
@@ -892,8 +954,11 @@ acmesh_build_profile_deploy_command() {
 	fi
 
 	if [ "$cert_source" = managed-acme ] && [ "$deploy_type" = local ]; then
+		[ "$preserve_metadata" = true ] && printf '%s\n' '# preserve existing owner/group/mode when each target exists'
 		acmesh_build_install_cert_command "$domain" "$key_file" "$fullchain_file" "$cert_file" "$ca_file" "" "${key_type:-ecc}" | tr -d '\n'
-		acmesh_deploy_metadata_command "$key_file" "$fullchain_file" "$owner" "$group" "$file_mode" || return $?
+		if [ "$preserve_metadata" != true ]; then
+			acmesh_deploy_metadata_command "$key_file" "$fullchain_file" "$owner" "$group" "$file_mode" || return $?
+		fi
 		[ -n "$reloadcmd" ] && printf ' && %s' "$reloadcmd"
 		printf '\n'
 		return
@@ -913,15 +978,20 @@ acmesh_build_profile_deploy_command() {
 		case "$sudo_mode" in always) remote_write_sudo=1;; never) remote_write_sudo=0;; ''|auto) remote_write_sudo=0; [ "$user" = root ] || remote_write_sudo=1;; *) return 1;; esac
 		fullchain_tmp="$fullchain_file.tmp"
 		key_tmp="$key_file.tmp"
+		[ "$preserve_metadata" = true ] && printf '%s\n' '# preserve existing owner/group/mode when each target exists'
 		acmesh_deploy_ssh_copy_command "$source_fullchain" "$target" "$fullchain_file" "$ssh_key" "$port" "$remote_write_sudo"
 		chain_metadata="chmod ${file_mode:-644} $(acmesh_shell_quote "$fullchain_tmp")"
-		[ -n "$owner" ] && chain_metadata="$chain_metadata && chown $(acmesh_shell_quote "$owner") $(acmesh_shell_quote "$fullchain_tmp")"
-		[ -n "$group" ] && chain_metadata="$chain_metadata && chgrp $(acmesh_shell_quote "$group") $(acmesh_shell_quote "$fullchain_tmp")"
+		if [ "$preserve_metadata" != true ]; then
+			[ -n "$owner" ] && chain_metadata="$chain_metadata && chown $(acmesh_shell_quote "$owner") $(acmesh_shell_quote "$fullchain_tmp")"
+			[ -n "$group" ] && chain_metadata="$chain_metadata && chgrp $(acmesh_shell_quote "$group") $(acmesh_shell_quote "$fullchain_tmp")"
+		fi
 		acmesh_deploy_ssh_exec_command "$target" "$ssh_key" "$port" "$chain_metadata && mv $(acmesh_shell_quote "$fullchain_tmp") $(acmesh_shell_quote "$fullchain_file")" "$remote_write_sudo"
 		acmesh_deploy_ssh_copy_command "$source_key" "$target" "$key_file" "$ssh_key" "$port" "$remote_write_sudo"
 		metadata="chmod ${file_mode:-600} $(acmesh_shell_quote "$key_tmp")"
-		[ -n "$owner" ] && metadata="$metadata && chown $(acmesh_shell_quote "$owner") $(acmesh_shell_quote "$key_tmp")"
-		[ -n "$group" ] && metadata="$metadata && chgrp $(acmesh_shell_quote "$group") $(acmesh_shell_quote "$key_tmp")"
+		if [ "$preserve_metadata" != true ]; then
+			[ -n "$owner" ] && metadata="$metadata && chown $(acmesh_shell_quote "$owner") $(acmesh_shell_quote "$key_tmp")"
+			[ -n "$group" ] && metadata="$metadata && chgrp $(acmesh_shell_quote "$group") $(acmesh_shell_quote "$key_tmp")"
+		fi
 		acmesh_deploy_ssh_exec_command "$target" "$ssh_key" "$port" "$metadata && mv $(acmesh_shell_quote "$key_tmp") $(acmesh_shell_quote "$key_file")" "$remote_write_sudo"
 		[ -n "$reloadcmd" ] && acmesh_deploy_ssh_exec_command "$target" "$ssh_key" "$port" "$reloadcmd"
 		return 0
@@ -929,6 +999,7 @@ acmesh_build_profile_deploy_command() {
 
 	key_dir="$(dirname "$key_file")"
 	fullchain_dir="$(dirname "$fullchain_file")"
+	[ "$preserve_metadata" = true ] && printf '%s\n' '# preserve existing owner/group/mode when each target exists'
 	printf 'mkdir -p %s %s && cp %s %s && chmod 600 %s && cp %s %s && chmod 644 %s' \
 		"$(acmesh_shell_quote "$key_dir")" \
 		"$(acmesh_shell_quote "$fullchain_dir")" \
@@ -938,7 +1009,9 @@ acmesh_build_profile_deploy_command() {
 		"$(acmesh_shell_quote "$source_fullchain")" \
 		"$(acmesh_shell_quote "$fullchain_file")" \
 		"$(acmesh_shell_quote "$fullchain_file")"
-	acmesh_deploy_metadata_command "$key_file" "$fullchain_file" "$owner" "$group" "$file_mode" || return $?
+	if [ "$preserve_metadata" != true ]; then
+		acmesh_deploy_metadata_command "$key_file" "$fullchain_file" "$owner" "$group" "$file_mode" || return $?
+	fi
 	[ -n "$reloadcmd" ] && printf ' && %s' "$reloadcmd"
 	printf '\n'
 }
@@ -1024,7 +1097,9 @@ acmesh_execute_profile_deploy_locked() {
 	owner="${19:-}"
 	group="${20:-}"
 	file_mode="${21:-}"
+	preserve_metadata="${22:-false}"
 	acmesh_deploy_metadata_valid "$owner" "$group" "$file_mode" || { echo "invalid deploy metadata" >&2; return 1; }
+	acmesh_deploy_preserve_metadata_valid "$preserve_metadata" || { echo "invalid preserve metadata flag" >&2; return 1; }
 
 	printf 'REAL MODE: executing deploy profile.\n'
 	acmesh_deploy_prepare_pem "$cert_source" "$domain" "$key_pem" "$fullchain_pem" || return $?
@@ -1041,7 +1116,7 @@ acmesh_execute_profile_deploy_locked() {
 			converted_ssh_key="$ssh_key"
 		fi
 	fi
-	command="$(acmesh_build_profile_deploy_command "$deploy_type" "$cert_source" "$domain" "$key_file" "$fullchain_file" "$cert_file" "$ca_file" "$reloadcmd" "$source_key_file" "$source_fullchain_file" "$key_pem" "$fullchain_pem" "$host" "$port" "$user" "$ssh_key" "$key_type" "$sudo_mode" "$owner" "$group" "$file_mode")" || return $?
+	command="$(acmesh_build_profile_deploy_command "$deploy_type" "$cert_source" "$domain" "$key_file" "$fullchain_file" "$cert_file" "$ca_file" "$reloadcmd" "$source_key_file" "$source_fullchain_file" "$key_pem" "$fullchain_pem" "$host" "$port" "$user" "$ssh_key" "$key_type" "$sudo_mode" "$owner" "$group" "$file_mode" "$preserve_metadata")" || return $?
 	if [ "$deploy_type" = ssh ]; then
 		source_key="$(acmesh_deploy_source_key_path "$cert_source" "$domain" "$source_key_file" "${key_type:-ecc}")"
 		source_fullchain="$(acmesh_deploy_source_fullchain_path "$cert_source" "$domain" "$source_fullchain_file" "${key_type:-ecc}")"
@@ -1052,7 +1127,7 @@ acmesh_execute_profile_deploy_locked() {
 		case "$sudo_mode" in always) remote_write_sudo=1;; never) remote_write_sudo=0;; ''|auto) remote_write_sudo=0; [ "$user" = root ] || remote_write_sudo=1;; *) return 1;; esac
 		status=0
 		acmesh_deploy_remote_transaction "$source_key" "$source_fullchain" "$key_file" "$fullchain_file" \
-			"$target" "$ssh_key" "$port" "$remote_write_sudo" "$reloadcmd" "$owner" "$group" "${file_mode:-644}" || status=$?
+			"$target" "$ssh_key" "$port" "$remote_write_sudo" "$reloadcmd" "$owner" "$group" "$file_mode" "$preserve_metadata" || status=$?
 		if [ -n "$converted_ssh_key" ]; then
 			acmesh_deploy_cleanup_temp_key
 			printf 'Removed temporary converted SSH key.\n'
@@ -1062,7 +1137,7 @@ acmesh_execute_profile_deploy_locked() {
 	source_key="$(acmesh_deploy_source_key_path "$cert_source" "$domain" "$source_key_file" "${key_type:-ecc}")"
 	source_fullchain="$(acmesh_deploy_source_fullchain_path "$cert_source" "$domain" "$source_fullchain_file" "${key_type:-ecc}")"
 	acmesh_deploy_transaction "$source_key" "$source_fullchain" "$key_file" "$fullchain_file" \
-		"$reloadcmd" "$owner" "$group" "${file_mode:-644}"
+		"$reloadcmd" "$owner" "$group" "$file_mode" "$preserve_metadata"
 }
 
 acmesh_execute_profile_deploy_guarded() (
