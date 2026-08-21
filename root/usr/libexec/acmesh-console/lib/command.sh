@@ -353,6 +353,7 @@ acmesh_execute_renew() {
 	home="$1"
 	main_domain="$2"
 	key_type="${3:-}"
+	credentials="$(acmesh_sanitize_credentials "${4:-}")"
 	[ -n "$main_domain" ] || { echo "domain is required" >&2; return 1; }
 	script="$(acmesh_find_script "$home")" || {
 		printf 'acme.sh not found in %s or PATH\n' "$home" >&2
@@ -368,6 +369,20 @@ acmesh_execute_renew() {
 	set -- "$script" --home "$home" --renew -d "$main_domain"
 	if [ -n "$key_type" ] && acmesh_key_type_is_ecc "$key_type"; then
 		set -- "$@" --ecc
+	fi
+	if [ -n "$credentials" ]; then
+		while IFS= read -r cred; do
+			[ -n "$cred" ] || continue
+			case "$cred" in
+				*=*)
+					name=${cred%%=*}
+					value=${cred#*=}
+					export "$name=$value"
+					;;
+				esac
+		done <<EOF
+$credentials
+EOF
 	fi
 	"$@"
 }

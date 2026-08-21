@@ -31,6 +31,8 @@ acmesh_operation_snapshot_reset() {
 	unset ACMESH_AUTH_CONFIG_DIGEST ACMESH_AUTH_OVERWRITE_MODE ACMESH_AUTH_EXPORT_SCOPE ACMESH_AUTH_EXPORT_CERTS
 	unset ACMESH_AUTH_OBJECT_IDENTITY ACMESH_AUTH_OBJECT_DIGEST ACMESH_AUTH_VARIANT
 	unset ACMESH_OPERATION_USES_ONCE_CONVERSION ACMESH_OPERATION_CONVERSION_FINGERPRINT ACMESH_OPERATION_RESOLVED_FILE
+	unset ACMESH_RENEW_CERT_CONF ACMESH_RENEW_DOMAIN ACMESH_RENEW_KEY_TYPE ACMESH_RENEW_DNS_API ACMESH_RENEW_CREDENTIALS
+	unset ACMESH_RENEW_CREDENTIAL_SOURCE ACMESH_RENEW_CREDENTIAL_MODE ACMESH_RENEW_CREDENTIAL_KEYS ACMESH_RENEW_PROFILE_ID
 }
 
 acmesh_operation_snapshot_issue() {
@@ -174,7 +176,7 @@ acmesh_operation_convert_key_task() {
 acmesh_operation_recompute() {
 	local recompute_operation="$1" recompute_subject_type="$2" recompute_subject_id="$3" recompute_snapshot="$4" recompute_summary="$5"
 	local recompute_resolved="${4}.resolved"
-	local renew_snapshot renew_summary renew_domain renew_variant cert_dir cert_conf renew_ca renew_alt renew_key renew_webroot renew_validation renew_dns_api renew_domains renew_deploy_id renew_deploy_fingerprint deploy_snapshot candidate config_path destructive_domain destructive_variant destructive_dir destructive_conf profile_kind profile_id
+	local renew_snapshot renew_summary renew_domain renew_variant cert_dir cert_conf renew_ca renew_alt renew_key renew_webroot renew_validation renew_dns_api renew_domains renew_deploy_id renew_deploy_fingerprint renew_auth_credential_mode deploy_snapshot candidate config_path destructive_domain destructive_variant destructive_dir destructive_conf profile_kind profile_id
 	case "$recompute_operation:$recompute_subject_type" in
 		issue:issueProfile) acmesh_operation_snapshot_issue "$recompute_subject_id" "$recompute_snapshot" "$recompute_summary" "$recompute_resolved" issue ;;
 		issue-deploy:issueProfile) acmesh_operation_snapshot_issue "$recompute_subject_id" "$recompute_snapshot" "$recompute_summary" "$recompute_resolved" issue-deploy ;;
@@ -184,6 +186,7 @@ acmesh_operation_recompute() {
 			acmesh_operation_snapshot_reset
 			renew_snapshot="$recompute_snapshot" renew_summary="$recompute_summary"
 			case "$recompute_subject_id" in ecc.*) renew_domain="${recompute_subject_id#ecc.}"; renew_variant=ecc;; rsa.*) renew_domain="${recompute_subject_id#rsa.}"; renew_variant=rsa;; *) renew_domain="$recompute_subject_id"; renew_variant=rsa;; esac
+			acmesh_profile_domain "$renew_domain" || { echo "invalid renewal certificate domain" >&2; return 1; }
 			cert_dir="$ACMESH_ACME_HOME/$renew_domain"; [ "$renew_variant" = ecc ] && cert_dir="${cert_dir}_ecc"
 			cert_conf="$cert_dir/$renew_domain.conf"; [ -f "$cert_conf" ] && [ ! -L "$cert_conf" ] || return 1
 			renew_ca="$(sed -n "s/^Le_API='\([^']*\)'.*/\1/p" "$cert_conf" | head -n 1)"; [ -n "$renew_ca" ] || renew_ca=letsencrypt
@@ -192,12 +195,19 @@ acmesh_operation_recompute() {
 			renew_webroot="$(sed -n "s/^Le_Webroot='\([^']*\)'.*/\1/p" "$cert_conf" | head -n 1)"
 			case "$renew_webroot" in dns_*) renew_validation=dns; renew_dns_api="$renew_webroot" ;; no|standalone) renew_validation=standalone; renew_dns_api= ;; tls_alpn_01) renew_validation=alpn; renew_dns_api= ;; *) renew_validation=webroot; renew_dns_api= ;; esac
 			renew_domains="$(printf '%s\n%s\n' "$renew_domain" "$renew_alt")"
+			acmesh_profile_resolve_renew_credentials "$cert_conf" "$renew_domain" "$renew_key" "$renew_dns_api" 0 || return 1
+			ACMESH_RENEW_CERT_CONF="$cert_conf" ACMESH_RENEW_DOMAIN="$renew_domain" ACMESH_RENEW_KEY_TYPE="$renew_key" ACMESH_RENEW_DNS_API="$renew_dns_api"
+			renew_auth_credential_mode="${ACMESH_RENEW_CREDENTIAL_MODE:-}"
+			case "${ACMESH_RENEW_CREDENTIAL_SOURCE:-}" in
+				certificate-config) renew_auth_credential_mode=certificate-config ;;
+				issue-profile:*) renew_auth_credential_mode="${ACMESH_RENEW_CREDENTIAL_SOURCE}:${ACMESH_RENEW_CREDENTIAL_MODE}" ;;
+			esac
 			# Certificate bytes and acme.sh renewal timestamps are expected to change
 			# after every successful renew and therefore are not authorization identity.
 			renew_deploy_id="$(acmesh_profile_find_linked_deploy "$renew_domain" "$renew_key" 2>/dev/null || true)" renew_deploy_fingerprint=
 			if [ -n "$renew_deploy_id" ]; then deploy_snapshot="${renew_snapshot}.linked-deploy"; acmesh_operation_snapshot_deploy "$renew_deploy_id" "$deploy_snapshot" "${renew_summary}.linked" "${renew_snapshot}.linked-resolved" || return 1; renew_deploy_fingerprint="$(acmesh_auth_fingerprint "$deploy_snapshot")"; fi
-			ACMESH_AUTH_ACCOUNT_ID=certificate ACMESH_AUTH_CA="$renew_ca" ACMESH_AUTH_PRIMARY_DOMAIN="$renew_domain" ACMESH_AUTH_DOMAINS="$renew_domains" ACMESH_AUTH_KEY_TYPE="$renew_key" ACMESH_AUTH_VALIDATION="$renew_validation" ACMESH_AUTH_DNS_API="$renew_dns_api" ACMESH_AUTH_WEBROOT="$renew_webroot" ACMESH_AUTH_DNS_SLEEP=0 ACMESH_AUTH_TEST_MODE=false ACMESH_AUTH_CERT_IDENTITY_DIGEST= ACMESH_AUTH_DEPLOY_PROFILE_ID="$renew_deploy_id" ACMESH_AUTH_DEPLOY_FINGERPRINT="$renew_deploy_fingerprint"
-			export ACMESH_AUTH_ACCOUNT_ID ACMESH_AUTH_CA ACMESH_AUTH_PRIMARY_DOMAIN ACMESH_AUTH_DOMAINS ACMESH_AUTH_KEY_TYPE ACMESH_AUTH_VALIDATION ACMESH_AUTH_DNS_API ACMESH_AUTH_WEBROOT ACMESH_AUTH_DNS_SLEEP ACMESH_AUTH_TEST_MODE ACMESH_AUTH_CERT_IDENTITY_DIGEST ACMESH_AUTH_DEPLOY_PROFILE_ID ACMESH_AUTH_DEPLOY_FINGERPRINT
+			ACMESH_AUTH_ACCOUNT_ID=certificate ACMESH_AUTH_CA="$renew_ca" ACMESH_AUTH_PRIMARY_DOMAIN="$renew_domain" ACMESH_AUTH_DOMAINS="$renew_domains" ACMESH_AUTH_KEY_TYPE="$renew_key" ACMESH_AUTH_VALIDATION="$renew_validation" ACMESH_AUTH_DNS_API="$renew_dns_api" ACMESH_AUTH_CREDENTIAL_MODE="$renew_auth_credential_mode" ACMESH_AUTH_CREDENTIAL_KEYS="${ACMESH_RENEW_CREDENTIAL_KEYS:-}" ACMESH_AUTH_WEBROOT="$renew_webroot" ACMESH_AUTH_DNS_SLEEP=0 ACMESH_AUTH_TEST_MODE=false ACMESH_AUTH_CERT_IDENTITY_DIGEST= ACMESH_AUTH_DEPLOY_PROFILE_ID="$renew_deploy_id" ACMESH_AUTH_DEPLOY_FINGERPRINT="$renew_deploy_fingerprint"
+			export ACMESH_AUTH_ACCOUNT_ID ACMESH_AUTH_CA ACMESH_AUTH_PRIMARY_DOMAIN ACMESH_AUTH_DOMAINS ACMESH_AUTH_KEY_TYPE ACMESH_AUTH_VALIDATION ACMESH_AUTH_DNS_API ACMESH_AUTH_CREDENTIAL_MODE ACMESH_AUTH_CREDENTIAL_KEYS ACMESH_AUTH_WEBROOT ACMESH_AUTH_DNS_SLEEP ACMESH_AUTH_TEST_MODE ACMESH_AUTH_CERT_IDENTITY_DIGEST ACMESH_AUTH_DEPLOY_PROFILE_ID ACMESH_AUTH_DEPLOY_FINGERPRINT
 			acmesh_auth_snapshot renew certificate "$recompute_subject_id" "$renew_snapshot" && acmesh_auth_summary "$renew_snapshot" "$renew_summary" ;;
 		core-install:global|core-upgrade:global)
 			acmesh_operation_snapshot_reset
@@ -325,8 +335,8 @@ acmesh_operation_run_renew_locked() {
 	snapshot="$workspace/renew-final.snapshot" summary="$workspace/renew-final-summary.json"
 	acmesh_operation_recompute renew certificate "$subject_id" "$snapshot" "$summary" || return 1
 	[ "$(acmesh_auth_fingerprint "$snapshot")" = "$expected" ] || { echo "renew authorization identity changed before execution" >&2; return 1; }
-	case "$subject_id" in ecc.*) renew_domain="${subject_id#ecc.}"; renew_key=ecc;; rsa.*) renew_domain="${subject_id#rsa.}"; renew_key=rsa;; *) renew_domain="$subject_id"; renew_key=rsa;; esac
-	acmesh_execute_renew "$ACMESH_ACME_HOME" "$renew_domain" "$renew_key"
+	acmesh_profile_resolve_renew_credentials "$ACMESH_RENEW_CERT_CONF" "$ACMESH_RENEW_DOMAIN" "$ACMESH_RENEW_KEY_TYPE" "$ACMESH_RENEW_DNS_API" 1 || return 1
+	acmesh_execute_renew "$ACMESH_ACME_HOME" "$ACMESH_RENEW_DOMAIN" "$ACMESH_RENEW_KEY_TYPE" "${ACMESH_RENEW_CREDENTIALS:-}"
 }
 
 acmesh_operation_run_certificate_destructive() {
