@@ -283,7 +283,7 @@ acmesh_profile_find_issue_for_renew() (
 	esac
 )
 
-acmesh_profile_load_issue_for_renew() {
+acmesh_profile_load_issue_for_renew_impl() {
 	ACMESH_RENEW_PROFILE_ID= ACMESH_RENEW_PROFILE_DOMAIN= ACMESH_RENEW_PROFILE_KEY_TYPE=
 	ACMESH_RENEW_PROFILE_DNS_API= ACMESH_RENEW_PROFILE_CREDENTIAL_MODE= ACMESH_RENEW_PROFILE_CREDENTIALS=
 	r_issue_id="${1:-}"
@@ -322,6 +322,18 @@ acmesh_profile_load_issue_for_renew() {
 	done
 	json_select .. || return 1
 	json_select .. || return 1
+}
+
+acmesh_profile_load_issue_for_renew() {
+	r_load_had_nounset=0
+	case "$-" in *u*) r_load_had_nounset=1; set +u ;; esac
+	if acmesh_profile_load_issue_for_renew_impl "$@"; then
+		r_load_rc=0
+	else
+		r_load_rc=$?
+	fi
+	[ "$r_load_had_nounset" = 1 ] && set -u
+	return "$r_load_rc"
 }
 
 acmesh_profile_renew_credential_name() {
