@@ -14,7 +14,7 @@ rm -rf "${ACMESH_CONSOLE_CONFIG%/*}"
 mkdir -p "${ACMESH_CONSOLE_CONFIG%/*}"
 chmod 700 "${ACMESH_CONSOLE_CONFIG%/*}"
 cat > "$ACMESH_CONSOLE_CONFIG" <<JSON
-{"schemaVersion":2,"global":{"defaultAccountEmail":"default@example.org","coreTag":"v3.1.4","acmeHome":"/etc/acme"},"accountProfiles":[{"id":"acc","name":"LE","ca":"letsencrypt_staging","accountEmail":"overlay@example.org"}],"issueProfiles":[{"id":"issue","name":"Example","domain":"example.org","domains":["example.org","www.example.org"],"accountProfileId":"acc","deployProfileId":"deploy","keyType":"ec256","validationMethod":"dns","testModeOverride":"force-test-mode","dnsApi":"dns_cf","credentialMode":"token","credentials":{"CF_Token":"top-secret"},"challengeAlias":"alias.example.net","dnsSleep":42}],"deployProfiles":[{"id":"deploy","name":"nginx","type":"ssh","certSource":"managed-acme","domain":"example.org","keyType":"ec256","host":"192.0.2.10","user":"root","port":"22","sshKey":"/root/.ssh/id_ed25519","keyFile":"/etc/ssl/example.key","fullchainFile":"/etc/ssl/example.pem","reloadcmd":"service nginx reload","sudoMode":"always","owner":"root","group":"ssl-cert","mode":"0640"},{"id":"local-deploy","name":"local","type":"local","certSource":"paste-pem","keyPem":"profile-private-key","fullchainPem":"profile-fullchain","keyFile":"$ROOT/tests/.tmp/profile-resolution/deployed.key","fullchainFile":"$ROOT/tests/.tmp/profile-resolution/deployed.fullchain","owner":"root","group":"root","mode":"0640"}]}
+{"schemaVersion":2,"global":{"defaultAccountEmail":"default@example.org","coreTag":"v3.1.4","acmeHome":"/etc/acme"},"accountProfiles":[{"id":"acc","name":"LE","ca":"letsencrypt_staging","accountEmail":"overlay@example.org"}],"issueProfiles":[{"id":"issue","name":"Example","domain":"example.org","domains":["example.org","www.example.org"],"accountProfileId":"acc","deployProfileId":"deploy","keyType":"ec256","validationMethod":"dns","testModeOverride":"force-test-mode","dnsApi":"dns_cf","credentialMode":"token","credentials":{"CF_Token":"top-secret"},"challengeAlias":"alias.example.net","dnsSleep":42}],"deployProfiles":[{"id":"deploy","name":"nginx","type":"ssh","certSource":"managed-acme","domain":"example.org","keyType":"ec256","host":"192.0.2.10","user":"root","port":"22","sshKey":"/root/.ssh/id_ed25519","keyFile":"/etc/ssl/example.key","fullchainFile":"/etc/ssl/example.pem","reloadcmd":"service nginx reload","sudoMode":"always","owner":"root","group":"ssl-cert","mode":"0640"},{"id":"local-deploy","name":"local","type":"local","certSource":"paste-pem","keyPem":"profile-private-key","fullchainPem":"profile-fullchain","keyFile":"$ROOT/tests/.tmp/profile-resolution/deployed.key","fullchainFile":"$ROOT/tests/.tmp/profile-resolution/deployed.fullchain"}]}
 JSON
 chmod 600 "$ACMESH_CONSOLE_CONFIG"
 
@@ -41,6 +41,12 @@ acmesh_profile_resolve_deploy deploy "$deploy" > "$stdout"
 [ "$(jsonfilter -i "$deploy" -e '@.destinations.owner')" = root ]
 [ "$(jsonfilter -i "$deploy" -e '@.destinations.group')" = ssl-cert ]
 [ "$(jsonfilter -i "$deploy" -e '@.destinations.mode')" = 0640 ]
+
+defaults="$ROOT/tests/.tmp/profile-resolution/defaults.json"
+acmesh_profile_resolve_deploy local-deploy "$defaults" > "$stdout"
+[ "$(jsonfilter -i "$defaults" -e '@.destinations.owner')" = root ]
+[ "$(jsonfilter -i "$defaults" -e '@.destinations.group')" = root ]
+[ "$(jsonfilter -i "$defaults" -e '@.destinations.mode')" = 600 ]
 
 acmesh_profile_resolve_issue missing "$issue" >/dev/null 2>&1 && { echo "missing profile accepted"; exit 1; } || :
 acmesh_profile_resolve_issue '../issue' "$issue" >/dev/null 2>&1 && { echo "unsafe id accepted"; exit 1; } || :

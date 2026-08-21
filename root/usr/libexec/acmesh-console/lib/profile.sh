@@ -158,6 +158,9 @@ acmesh_profile_resolve_deploy() (
 	cert_file="$(jsonfilter -i "$tmp" -e '@.certFile' 2>/dev/null || true)"; ca_file="$(jsonfilter -i "$tmp" -e '@.caFile' 2>/dev/null || true)"
 	reload="$(jsonfilter -i "$tmp" -e '@.reloadcmd' 2>/dev/null || true)"; sudo_mode="$(jsonfilter -i "$tmp" -e '@.sudoMode' 2>/dev/null || true)"
 	owner="$(jsonfilter -i "$tmp" -e '@.owner' 2>/dev/null || true)"; group="$(jsonfilter -i "$tmp" -e '@.group' 2>/dev/null || true)"; mode="$(jsonfilter -i "$tmp" -e '@.mode' 2>/dev/null || true)"; preserve_metadata="$(jsonfilter -i "$tmp" -e '@.preserveMetadata' 2>/dev/null || true)"
+	[ -n "$owner" ] || owner=root
+	[ -n "$group" ] || group=root
+	[ -n "$mode" ] || mode=600
 	[ "$preserve_metadata" = true ] || preserve_metadata=false
 	digest="$(sha256sum "$ACMESH_CONSOLE_CONFIG" | awk '{print $1}')"; rm -f "$tmp"
 	printf '{"id":"%s","source":{"config":"%s","digest":"%s","certSource":"%s","domain":"%s","keyType":"%s","keyFile":"%s","fullchainFile":"%s","keyPem":"%s","fullchainPem":"%s"},"target":{"type":"%s","host":"%s","port":%s,"user":"%s","sshKey":"%s","sudoMode":"%s"},"destinations":{"keyFile":"%s","fullchainFile":"%s","certFile":"%s","caFile":"%s","owner":"%s","group":"%s","mode":"%s","preserveMetadata":%s},"reloadCommand":"%s"}\n' \
@@ -185,6 +188,9 @@ acmesh_profile_load_deploy_file() {
 	ACMESH_DEPLOY_OWNER="$(jsonfilter -i "$path" -e '@.destinations.owner' 2>/dev/null || true)"
 	ACMESH_DEPLOY_GROUP="$(jsonfilter -i "$path" -e '@.destinations.group' 2>/dev/null || true)"
 	ACMESH_DEPLOY_MODE="$(jsonfilter -i "$path" -e '@.destinations.mode' 2>/dev/null || true)"
+	[ -n "$ACMESH_DEPLOY_OWNER" ] || ACMESH_DEPLOY_OWNER=root
+	[ -n "$ACMESH_DEPLOY_GROUP" ] || ACMESH_DEPLOY_GROUP=root
+	[ -n "$ACMESH_DEPLOY_MODE" ] || ACMESH_DEPLOY_MODE=600
 	ACMESH_DEPLOY_PRESERVE_METADATA="$(jsonfilter -i "$path" -e '@.destinations.preserveMetadata' 2>/dev/null || true)"
 	[ "$ACMESH_DEPLOY_PRESERVE_METADATA" = true ] || ACMESH_DEPLOY_PRESERVE_METADATA=false
 }

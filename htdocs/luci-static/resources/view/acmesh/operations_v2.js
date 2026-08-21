@@ -726,7 +726,7 @@ return view.extend({
 				return '-';
 			if (profile.preserveMetadata === true)
 				return _('Keep existing owner/group/mode');
-			return (profile.owner || _('default owner')) + ':' + (profile.group || _('default group')) + ' / ' + (profile.mode || _('key 0600 / fullchain 0644'));
+			return (profile.owner || 'root') + ':' + (profile.group || 'root') + ' / ' + (profile.mode || '600');
 		};
 
 		const resolveDeployProfile = function(profile) {
@@ -1528,9 +1528,9 @@ return view.extend({
 			const fullchainPem = E('textarea', { 'class': 'cbi-input-text acmesh-pem-input', 'placeholder': '-----BEGIN CERTIFICATE-----', 'rows': 9 }, existing.fullchainPem || '');
 			const keyFile = input(existing.keyFile || '', '/etc/ssl/example.key');
 			const fullchain = input(existing.fullchainFile || '', '/etc/ssl/example.fullchain.pem');
-			const owner = input(existing.owner || '', 'root');
-			const group = input(existing.group || '', 'sing-box');
-			const mode = input(existing.mode || '', '0640');
+			const owner = input(existing.owner || 'root', 'root');
+			const group = input(existing.group || 'root', 'root');
+			const mode = input(existing.mode || '600', '600');
 			const preserveMetadata = E('input', { 'type': 'checkbox' });
 			preserveMetadata.checked = existing.preserveMetadata === true;
 			const reloadcmd = input(existing.reloadcmd || '', 'service nginx reload');
