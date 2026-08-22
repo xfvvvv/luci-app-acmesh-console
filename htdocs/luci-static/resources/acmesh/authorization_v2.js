@@ -5,6 +5,10 @@
 
 const ACKNOWLEDGEMENT = _('The plugin will execute the operation strictly according to the parameters above. By continuing, you confirm that you have reviewed and accept the consequences of certificate issuance quotas, remote file overwrite, service reload, and target system configuration.');
 
+function isBooleanTrue(value) {
+	return value === true || value === 1 || value === 'true' || value === '1';
+}
+
 function safeText(value) {
 	return value == null || value === '' ? '-' : String(value);
 }
@@ -26,7 +30,7 @@ function showChallenge(response, options) {
 	return new Promise(function(resolve, reject) {
 		const destructive = !!options.destructive || [ 'certificate-revoke', 'certificate-remove', 'profile-delete', 'import-apply' ].indexOf(response.operation) >= 0;
 		const summary = response.riskSummary && typeof response.riskSummary === 'object' ? response.riskSummary : {};
-		const sudoPasswordRequired = response.sudoPasswordRequired === true || summary.sudoPasswordRequired === true || summary.deploySudoPasswordRequired === true;
+		const sudoPasswordRequired = isBooleanTrue(response.sudoPasswordRequired) || isBooleanTrue(summary.sudoPasswordRequired) || isBooleanTrue(summary.deploySudoPasswordRequired);
 		const sudoPasswordInput = sudoPasswordRequired ? E('input', { 'class': 'form-control', 'type': 'password', 'autocomplete': 'off', 'spellcheck': 'false' }) : null;
 		const finish = function(decision) {
 			if (decision === 'remember' && sudoPasswordInput && sudoPasswordInput.value)

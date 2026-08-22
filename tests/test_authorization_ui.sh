@@ -17,6 +17,9 @@ require "$AUTH" "'authorization_execute'"
 require "$AUTH" "'once'"
 require "$AUTH" "'remember'"
 require "$AUTH" 'response.riskSummary'
+require "$AUTH" 'function isBooleanTrue(value)'
+require "$AUTH" "value === 'true'"
+require "$AUTH" "value === '1'"
 require "$AUTH" 'sudoPasswordRequired'
 require "$AUTH" 'sudoPassword'
 require "$AUTH" "'type': 'password'"
