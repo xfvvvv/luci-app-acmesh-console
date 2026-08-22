@@ -6,7 +6,12 @@
 const ACKNOWLEDGEMENT = _('The plugin will execute the operation strictly according to the parameters above. By continuing, you confirm that you have reviewed and accept the consequences of certificate issuance quotas, remote file overwrite, service reload, and target system configuration.');
 
 function isBooleanTrue(value) {
-	return value === true || value === 1 || value === 'true' || value === '1';
+	if (value === true || value === 1)
+		return true;
+	if (value == null)
+		return false;
+	const normalized = String(value).trim().toLowerCase();
+	return normalized === 'true' || normalized === '1';
 }
 
 function safeText(value) {
