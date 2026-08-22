@@ -65,7 +65,7 @@ function showChallenge(response, options) {
 			E('button', { 'class': 'btn cbi-button cbi-button-neutral', 'click': function() { finish(null); } }, _('Cancel')),
 			E('button', { 'class': 'btn cbi-button cbi-button-apply', 'click': function() { finish('once'); } }, _('Run once'))
 		];
-		if (!destructive)
+		if (!destructive && !sudoPasswordInput)
 			buttons.push(E('button', { 'class': 'btn cbi-button cbi-button-positive', 'click': function() { finish('remember'); } }, _('Run and remember')));
 		const content = [
 			E('p', { 'class': 'acmesh-warning' }, _('Review the exact material operation before continuing.')),

@@ -24,6 +24,7 @@ require "$AUTH" "normalized === '1'"
 require "$AUTH" 'sudoPasswordRequired'
 require "$AUTH" 'sudoPassword'
 require "$AUTH" "'type': 'password'"
+require "$AUTH" '!sudoPasswordInput'
 require "$AUTH" "response.error === 'hostKeyChanged'"
 require "$AUTH" "probed.ok || (!probed.challengeId"
 require "$AUTH" "!probed.challengeId"
